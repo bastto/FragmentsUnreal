@@ -1,0 +1,35 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "FragmentsUnreal",
+	"Description": ".",
+	"Category": "",
+	"CreatedBy": "@jairo-picott",
+	"CreatedByURL": "",
+	"DocsURL": "",
+	"MarketplaceURL": "",
+	"SupportURL": "",
+	"CanContainContent": true,
+	"IsBetaVersion": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "FragmentsUnreal",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"AdditionalDependencies": [
+		"ProceduralMeshComponent",
+		"GeometryScriptingCore",
+		"GeometryCore"
+	],
+	"Content": [
+		{
+			"Path": "Content/Materials",
+			"FolderName": "Materials"
+		}
+	],
+	"IsExperimentalVersion": false
+}
