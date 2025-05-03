@@ -123,9 +123,15 @@ public:
 
 private:
 
-	void SpawnStaticMesh(UStaticMesh* StaticMesh, const Transform* LocalTransform, const Transform* GlobalTransform, UWorld* World);
+	void SpawnStaticMesh(UStaticMesh* StaticMesh, const Transform* LocalTransform, const Transform* GlobalTransform, UWorld* World, FName OptionalTag = FName());
 	UStaticMesh* CreateStaticMeshFromShell(
 		const Shell* ShellRef,
+		const Material* RefMaterial,
+		const FString& AssetName,
+		const FString& AssetPath
+	);
+	UStaticMesh* CreateStaticMeshFromCircleExtrusion(
+		const CircleExtrusion* CircleExtrusion,
 		const Material* RefMaterial,
 		const FString& AssetName,
 		const FString& AssetPath

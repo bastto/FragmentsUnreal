@@ -147,13 +147,26 @@ void UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath)
 
 				}
 			}
+			else if (representation->representation_class() == RepresentationClass_CIRCLE_EXTRUSION)
+			{
+				const auto* circleExtrusion = cirle_extrusions->Get(representation->id());
+				Mesh = CreateStaticMeshFromCircleExtrusion(circleExtrusion, material, *Name, TEXT("/Game/Fragments"));
+				if (Mesh)
+				{
+					SpawnStaticMesh(Mesh, local_transform, global_transform, OwnerRef->GetWorld(), FName(TEXT("circle_extrussion")));
+				}
+			}
+			else
+			{
+				
+			}
 		}
 	}
 }
 
 
 
-void UFragmentsImporter::SpawnStaticMesh(UStaticMesh* StaticMesh,const Transform* LocalTransform, const Transform* GlobalTransform, UWorld* World)
+void UFragmentsImporter::SpawnStaticMesh(UStaticMesh* StaticMesh,const Transform* LocalTransform, const Transform* GlobalTransform, UWorld* World, FName OptionalTag)
 {
 	if (!StaticMesh || !LocalTransform || !GlobalTransform || !World) return;
 
@@ -221,6 +234,9 @@ void UFragmentsImporter::SpawnStaticMesh(UStaticMesh* StaticMesh,const Transform
 	// Ensure mesh is added and visible
 	MeshComponent->SetVisibility(true);
 	MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+
+	// Add Optional tag
+	MeshActor->Tags.Add(OptionalTag);
 }
 
 UStaticMesh* UFragmentsImporter::CreateStaticMeshFromShell(const Shell* ShellRef, const Material* RefMaterial, const FString& AssetName, const FString& AssetPath)
@@ -376,7 +392,116 @@ UStaticMesh* UFragmentsImporter::CreateStaticMeshFromShell(const Shell* ShellRef
 		}
 	}
 	
+	FStaticMeshOperations::ComputeTriangleTangentsAndNormals(MeshDescription);
+	FStaticMeshOperations::ComputeTangentsAndNormals(MeshDescription, EComputeNTBsFlags::Normals | EComputeNTBsFlags::Tangents);
 
+	StaticMesh->BuildFromMeshDescriptions(TArray<const FMeshDescription*>{&MeshDescription}, MeshParams);
+	FAssetRegistryModule::AssetCreated(StaticMesh);
+
+	return StaticMesh;
+}
+
+UStaticMesh* UFragmentsImporter::CreateStaticMeshFromCircleExtrusion(const CircleExtrusion* CircleExtrusion, const Material* RefMaterial, const FString& AssetName, const FString& AssetPath)
+{
+	UStaticMesh* StaticMesh = NewObject<UStaticMesh>(OwnerRef, FName(*AssetName), RF_Public | RF_Standalone | RF_Transient);
+	StaticMesh->InitResources();
+	StaticMesh->SetLightingGuid();
+
+	UStaticMeshDescription* StaticMeshDescription = StaticMesh->CreateStaticMeshDescription(OwnerRef);
+	FMeshDescription& MeshDescription = StaticMeshDescription->GetMeshDescription();
+	UStaticMesh::FBuildMeshDescriptionsParams MeshParams;
+	MeshParams.bBuildSimpleCollision = true;
+	MeshParams.bCommitMeshDescription = true;
+	MeshParams.bMarkPackageDirty = true;
+	MeshParams.bUseHashAsGuid = false;
+
+	const auto* Axes = CircleExtrusion->axes();
+	const auto* Radii = CircleExtrusion->radius();
+
+	if (!Axes || Axes->size() == 0)
+		return nullptr;
+
+	FName MaterialSlotName = AddMaterialToMesh(StaticMesh, RefMaterial);
+	const FPolygonGroupID PolygonGroupId = StaticMeshDescription->CreatePolygonGroup();
+	StaticMeshDescription->SetPolygonGroupMaterialSlotName(PolygonGroupId, MaterialSlotName);
+	
+	int32 SegmentCount = 16;
+
+	for (flatbuffers::uoffset_t axisIndex = 0; axisIndex < Axes->size(); ++axisIndex)
+	{
+		const auto* Axis = Axes->Get(axisIndex);
+		const auto* CircleCurves = Axis->circle_curves();
+		const auto* Orders = Axis->order();
+		const auto* Parts = Axis->parts();
+		const auto* Wires = Axis->wires();
+		const auto* WireSets = Axis->wire_sets();
+
+		TArray<TArray<FVertexID>> AllRings;
+
+		for (flatbuffers::uoffset_t i = 0; i < Orders->size(); i++)
+		{
+			int32 PartIndex = Parts->Get(i);
+			int32 OrderIndex = Orders->Get(i);
+
+			TArray<FVector> SampledPositions;
+
+			const auto* Wire = Wires->Get(OrderIndex);
+			FVector P1 = FVector(Wire->p1().x(), Wire->p1().z(), Wire->p1().y()) * 100.0f;
+			FVector P2 = FVector(Wire->p2().x(), Wire->p2().z(), Wire->p2().y()) * 100.0f;
+			FVector Center = (P1 + P2) * 0.5f;
+
+			FVector Direction = (P2 - P1).GetSafeNormal();
+			FVector XDir, YDir;
+
+			// Create an orthonormal basis for the circle
+			Direction.FindBestAxisVectors(XDir, YDir);
+
+			TArray<FVertexID> Ring1, Ring2;
+
+			for (int32 j = 0; j < SegmentCount; j++)
+			{
+				float Angle = 2.0f * PI * j / SegmentCount;
+				FVector Offset = FMath::Cos(Angle) * XDir + FMath::Sin(Angle) * YDir;
+				FVector V1 = P1 + Offset * Radii->Get(OrderIndex) * 100.0f;
+				FVector V2 = P2 + Offset * Radii->Get(OrderIndex) * 100.0f;
+
+				FVertexID ID1 = StaticMeshDescription->CreateVertex();
+				FVertexID ID2 = StaticMeshDescription->CreateVertex();
+
+				StaticMeshDescription->SetVertexPosition(ID1, V1);
+				StaticMeshDescription->SetVertexPosition(ID2, V2);
+
+				Ring1.Add(ID1);
+				Ring2.Add(ID2);
+			}
+
+			// Connect the rings with quads
+			for (int32 j = 0; j < SegmentCount; ++j)
+			{
+				int32 Next = (j + 1) % SegmentCount;
+
+				FVertexID V00 = Ring1[j];
+				FVertexID V01 = Ring2[j];
+				FVertexID V10 = Ring1[Next];
+				FVertexID V11 = Ring2[Next];
+
+				TArray<FVertexInstanceID> Tri1 = {
+					MeshDescription.CreateVertexInstance(V00),
+					MeshDescription.CreateVertexInstance(V01),
+					MeshDescription.CreateVertexInstance(V10)
+				};
+
+				TArray<FVertexInstanceID> Tri2 = {
+					MeshDescription.CreateVertexInstance(V10),
+					MeshDescription.CreateVertexInstance(V01),
+					MeshDescription.CreateVertexInstance(V11)
+				};
+
+				MeshDescription.CreatePolygon(PolygonGroupId, Tri1);
+				MeshDescription.CreatePolygon(PolygonGroupId, Tri2);
+			}
+		}
+	}
 
 	FStaticMeshOperations::ComputeTriangleTangentsAndNormals(MeshDescription);
 	FStaticMeshOperations::ComputeTangentsAndNormals(MeshDescription, EComputeNTBsFlags::Normals | EComputeNTBsFlags::Tangents);
