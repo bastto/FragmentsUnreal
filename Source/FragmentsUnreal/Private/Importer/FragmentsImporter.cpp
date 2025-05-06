@@ -143,7 +143,7 @@ void UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath)
 				Mesh = CreateStaticMeshFromShell(shell, material, *Name, TEXT("/Game/Fragments"));
 				if (Mesh)
 				{
-					SpawnStaticMesh(Mesh,local_transform, global_transform, OwnerRef->GetWorld());
+					SpawnStaticMesh(Mesh,local_transform, global_transform, OwnerRef->GetWorld(), FName(TEXT("shell")));
 
 				}
 			}
@@ -163,8 +163,6 @@ void UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath)
 		}
 	}
 }
-
-
 
 void UFragmentsImporter::SpawnStaticMesh(UStaticMesh* StaticMesh,const Transform* LocalTransform, const Transform* GlobalTransform, UWorld* World, FName OptionalTag)
 {
@@ -403,112 +401,52 @@ UStaticMesh* UFragmentsImporter::CreateStaticMeshFromShell(const Shell* ShellRef
 
 UStaticMesh* UFragmentsImporter::CreateStaticMeshFromCircleExtrusion(const CircleExtrusion* CircleExtrusion, const Material* RefMaterial, const FString& AssetName, const FString& AssetPath)
 {
+	if (!CircleExtrusion || !CircleExtrusion->axes() || CircleExtrusion->axes()->size() == 0)
+		return nullptr;
+
 	UStaticMesh* StaticMesh = NewObject<UStaticMesh>(OwnerRef, FName(*AssetName), RF_Public | RF_Standalone | RF_Transient);
 	StaticMesh->InitResources();
 	StaticMesh->SetLightingGuid();
 
-	UStaticMeshDescription* StaticMeshDescription = StaticMesh->CreateStaticMeshDescription(OwnerRef);
-	FMeshDescription& MeshDescription = StaticMeshDescription->GetMeshDescription();
+	TArray<const FMeshDescription*> MeshDescriptionPtrs;
+
+	// LOD0 – Full circle extrusion
+	UStaticMeshDescription* LOD0Desc = StaticMesh->CreateStaticMeshDescription(OwnerRef);
+	BuildFullCircleExtrusion(*LOD0Desc, CircleExtrusion, RefMaterial, StaticMesh);
+	MeshDescriptionPtrs.Add(&LOD0Desc->GetMeshDescription());
+
+	{ // To Do: Implementation of LOD for Static Mesh Created. Seaking for better Performance??
+		// LOD1 – Line representation
+		//UStaticMeshDescription* LOD1Desc = StaticMesh->CreateStaticMeshDescription(OwnerRef);
+		//BuildLineOnlyMesh(*LOD1Desc, CircleExtrusion);
+		//MeshDescriptionPtrs.Add(&LOD1Desc->GetMeshDescription());
+
+		//// LOD2 – Empty mesh
+		//UStaticMeshDescription* LOD2Desc = StaticMesh->CreateStaticMeshDescription(OwnerRef);
+		////BuildEmptyMesh(*LOD2Desc);
+		//MeshDescriptionPtrs.Add(&LOD2Desc->GetMeshDescription());
+	}
+
+	// Build mesh
 	UStaticMesh::FBuildMeshDescriptionsParams MeshParams;
 	MeshParams.bBuildSimpleCollision = true;
 	MeshParams.bCommitMeshDescription = true;
 	MeshParams.bMarkPackageDirty = true;
 	MeshParams.bUseHashAsGuid = false;
 
-	const auto* Axes = CircleExtrusion->axes();
-	const auto* Radii = CircleExtrusion->radius();
-
-	if (!Axes || Axes->size() == 0)
-		return nullptr;
-
-	FName MaterialSlotName = AddMaterialToMesh(StaticMesh, RefMaterial);
-	const FPolygonGroupID PolygonGroupId = StaticMeshDescription->CreatePolygonGroup();
-	StaticMeshDescription->SetPolygonGroupMaterialSlotName(PolygonGroupId, MaterialSlotName);
+	StaticMesh->BuildFromMeshDescriptions(MeshDescriptionPtrs, MeshParams);
 	
-	int32 SegmentCount = 16;
-
-	for (flatbuffers::uoffset_t axisIndex = 0; axisIndex < Axes->size(); ++axisIndex)
+	if (StaticMesh->GetNumSourceModels() >= 3)
 	{
-		const auto* Axis = Axes->Get(axisIndex);
-		const auto* CircleCurves = Axis->circle_curves();
-		const auto* Orders = Axis->order();
-		const auto* Parts = Axis->parts();
-		const auto* Wires = Axis->wires();
-		const auto* WireSets = Axis->wire_sets();
-
-		TArray<TArray<FVertexID>> AllRings;
-
-		for (flatbuffers::uoffset_t i = 0; i < Orders->size(); i++)
-		{
-			int32 PartIndex = Parts->Get(i);
-			int32 OrderIndex = Orders->Get(i);
-
-			TArray<FVector> SampledPositions;
-
-			const auto* Wire = Wires->Get(OrderIndex);
-			FVector P1 = FVector(Wire->p1().x(), Wire->p1().z(), Wire->p1().y()) * 100.0f;
-			FVector P2 = FVector(Wire->p2().x(), Wire->p2().z(), Wire->p2().y()) * 100.0f;
-			FVector Center = (P1 + P2) * 0.5f;
-
-			FVector Direction = (P2 - P1).GetSafeNormal();
-			FVector XDir, YDir;
-
-			// Create an orthonormal basis for the circle
-			Direction.FindBestAxisVectors(XDir, YDir);
-
-			TArray<FVertexID> Ring1, Ring2;
-
-			for (int32 j = 0; j < SegmentCount; j++)
-			{
-				float Angle = 2.0f * PI * j / SegmentCount;
-				FVector Offset = FMath::Cos(Angle) * XDir + FMath::Sin(Angle) * YDir;
-				FVector V1 = P1 + Offset * Radii->Get(OrderIndex) * 100.0f;
-				FVector V2 = P2 + Offset * Radii->Get(OrderIndex) * 100.0f;
-
-				FVertexID ID1 = StaticMeshDescription->CreateVertex();
-				FVertexID ID2 = StaticMeshDescription->CreateVertex();
-
-				StaticMeshDescription->SetVertexPosition(ID1, V1);
-				StaticMeshDescription->SetVertexPosition(ID2, V2);
-
-				Ring1.Add(ID1);
-				Ring2.Add(ID2);
-			}
-
-			// Connect the rings with quads
-			for (int32 j = 0; j < SegmentCount; ++j)
-			{
-				int32 Next = (j + 1) % SegmentCount;
-
-				FVertexID V00 = Ring1[j];
-				FVertexID V01 = Ring2[j];
-				FVertexID V10 = Ring1[Next];
-				FVertexID V11 = Ring2[Next];
-
-				TArray<FVertexInstanceID> Tri1 = {
-					MeshDescription.CreateVertexInstance(V00),
-					MeshDescription.CreateVertexInstance(V01),
-					MeshDescription.CreateVertexInstance(V10)
-				};
-
-				TArray<FVertexInstanceID> Tri2 = {
-					MeshDescription.CreateVertexInstance(V10),
-					MeshDescription.CreateVertexInstance(V01),
-					MeshDescription.CreateVertexInstance(V11)
-				};
-
-				MeshDescription.CreatePolygon(PolygonGroupId, Tri1);
-				MeshDescription.CreatePolygon(PolygonGroupId, Tri2);
-			}
-		}
+		StaticMesh->GetSourceModel(0).ScreenSize.Default = 1.0f;
+		StaticMesh->GetSourceModel(1).ScreenSize.Default = 0.5f;
+		StaticMesh->GetSourceModel(2).ScreenSize.Default = 0.1f;
 	}
-
-	FStaticMeshOperations::ComputeTriangleTangentsAndNormals(MeshDescription);
-	FStaticMeshOperations::ComputeTangentsAndNormals(MeshDescription, EComputeNTBsFlags::Normals | EComputeNTBsFlags::Tangents);
-
-	StaticMesh->BuildFromMeshDescriptions(TArray<const FMeshDescription*>{&MeshDescription}, MeshParams);
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Unexpected: Only %d LODs were created!"), StaticMesh->GetNumSourceModels());
+	}
 	FAssetRegistryModule::AssetCreated(StaticMesh);
-
 	return StaticMesh;
 }
 
@@ -709,4 +647,339 @@ bool UFragmentsImporter::TriangulatePolygonWithHoles(const TArray<FVector>& Poin
 	tessDeleteTess(Tess);
 
 	return true;
+}
+
+void UFragmentsImporter::BuildFullCircleExtrusion(UStaticMeshDescription& StaticMeshDescription, const CircleExtrusion* CircleExtrusion, const Material* RefMaterial, UStaticMesh* StaticMesh)
+{
+	FStaticMeshAttributes Attributes(StaticMeshDescription.GetMeshDescription());
+	Attributes.Register();
+
+	FName MaterialSlotName = AddMaterialToMesh(StaticMesh, RefMaterial);
+	const FPolygonGroupID PolygonGroupId = StaticMeshDescription.CreatePolygonGroup();
+	StaticMeshDescription.SetPolygonGroupMaterialSlotName(PolygonGroupId, MaterialSlotName);
+
+	FMeshDescription& MeshDescription = StaticMeshDescription.GetMeshDescription();
+
+	const auto* Axes = CircleExtrusion->axes();
+	const auto* Radii = CircleExtrusion->radius();
+	int32 SegmentCount = 16;
+
+	for (flatbuffers::uoffset_t axisIndex = 0; axisIndex < Axes->size(); ++axisIndex)
+	{
+		const auto* Axis = Axes->Get(axisIndex);
+		const auto* Orders = Axis->order();
+		const auto* Parts = Axis->parts();
+		const auto* Wires = Axis->wires();
+		const auto* WireSets = Axis->wire_sets();
+		//TArray<TArray<FVertexID>> AllRings;
+
+		for (flatbuffers::uoffset_t i = 0; i < Orders->size(); i++)
+		{
+			int32 OrderIndex = Orders->Get(i);
+			int32 PartIndex = Parts->Get(i);
+
+			TArray<TArray<FVertexID>> RingVertexIDs;
+
+			// Handle CIRCLE_CURVE
+			if (Axis->circle_curves() && PartIndex == (int)AxisPartClass::AxisPartClass_CIRCLE_CURVE)
+			{
+				const auto* Curves = Axis->circle_curves();
+				const float Radius = Radii->Get(axisIndex) * 100.0f;
+
+				TArray<FVector> ArcCenters;
+				TArray<FVector> ArcTangents;
+
+				// Sample arc
+				for (flatbuffers::uoffset_t c = 0; c < Curves->size(); ++c)
+				{
+					const auto* Circle = Curves->Get(c);
+					FVector Center = FVector(Circle->position().x(), Circle->position().z(), Circle->position().y()) * 100.0f;
+					FVector XDir = FVector(Circle->x_direction().x(), Circle->x_direction().z(), Circle->x_direction().y());
+					FVector YDir = FVector(Circle->y_direction().x(), Circle->y_direction().z(), Circle->y_direction().y());
+					float ApertureRad = FMath::DegreesToRadians(Circle->aperture());
+					float ArcRadius = Circle->radius() * 100.0f;
+
+					int32 ArcDivs = FMath::Clamp(FMath::RoundToInt(ApertureRad * ArcRadius * 0.05f), 4, 32);
+					for (int32 j = 0; j <= ArcDivs; ++j)
+					{
+						float t = static_cast<float>(j) / ArcDivs;
+						float angle = -ApertureRad / 2.0f + t * ApertureRad;
+						FVector Pos = Center + ArcRadius * (FMath::Cos(angle) * XDir + FMath::Sin(angle) * YDir);
+						ArcCenters.Add(Pos);
+					}
+				}
+
+				// Compute tangents
+				for (int32 j = 0; j < ArcCenters.Num(); ++j)
+				{
+					if (j == 0)
+						ArcTangents.Add((ArcCenters[1] - ArcCenters[0]).GetSafeNormal());
+					else if (j == ArcCenters.Num() - 1)
+						ArcTangents.Add((ArcCenters.Last() - ArcCenters[j - 1]).GetSafeNormal());
+					else
+						ArcTangents.Add((ArcCenters[j + 1] - ArcCenters[j - 1]).GetSafeNormal());
+				}
+
+				// Initial frame from first tangent
+				FVector PrevTangent = ArcTangents[0];
+				FVector PrevX, PrevY;
+				PrevTangent.FindBestAxisVectors(PrevX, PrevY);
+
+				TArray<TArray<FVertexID>> AllRings;
+
+				for (int32 k = 0; k < ArcCenters.Num(); ++k)
+				{
+					const FVector& Tangent = ArcTangents[k];
+					FQuat AlignQuat = FQuat::FindBetweenNormals(PrevTangent, Tangent);
+					FVector CurrX = AlignQuat.RotateVector(PrevX);
+					FVector CurrY = AlignQuat.RotateVector(PrevY);
+
+					TArray<FVertexID> Ring;
+					for (int32 j = 0; j < SegmentCount; ++j)
+					{
+						float Angle = 2.0f * PI * j / SegmentCount;
+						FVector Offset = FMath::Cos(Angle) * CurrX + FMath::Sin(Angle) * CurrY;
+						FVector Pos = ArcCenters[k] + Offset * Radius;
+
+						FVertexID V = StaticMeshDescription.CreateVertex();
+						StaticMeshDescription.SetVertexPosition(V, Pos);
+						Ring.Add(V);
+					}
+
+					AllRings.Add(Ring);
+					PrevTangent = Tangent;
+					PrevX = CurrX;
+					PrevY = CurrY;
+				}
+
+				// Stitch rings
+				for (int32 k = 0; k < AllRings.Num() - 1; ++k)
+				{
+					const auto& RingA = AllRings[k];
+					const auto& RingB = AllRings[k + 1];
+
+					for (int32 j = 0; j < SegmentCount; ++j)
+					{
+						int32 Next = (j + 1) % SegmentCount;
+
+						FVertexID V00 = RingA[j];
+						FVertexID V01 = RingB[j];
+						FVertexID V10 = RingA[Next];
+						FVertexID V11 = RingB[Next];
+
+						TArray<FVertexInstanceID> Tri1 = {
+							MeshDescription.CreateVertexInstance(V00),
+							MeshDescription.CreateVertexInstance(V01),
+							MeshDescription.CreateVertexInstance(V10)
+						};
+						TArray<FVertexInstanceID> Tri2 = {
+							MeshDescription.CreateVertexInstance(V10),
+							MeshDescription.CreateVertexInstance(V01),
+							MeshDescription.CreateVertexInstance(V11)
+						};
+
+						MeshDescription.CreatePolygon(PolygonGroupId, Tri1);
+						MeshDescription.CreatePolygon(PolygonGroupId, Tri2);
+					}
+				}
+			}
+
+			else if (Wires && PartIndex == (int)AxisPartClass::AxisPartClass_WIRE)
+			{
+				// Handle Wire
+				const auto* Wire = Wires->Get(OrderIndex);
+				FVector P1 = FVector(Wire->p1().x(), Wire->p1().z(), Wire->p1().y()) * 100.0f;
+				FVector P2 = FVector(Wire->p2().x(), Wire->p2().z(), Wire->p2().y()) * 100.0f;
+
+				FVector Direction = (P2 - P1).GetSafeNormal();
+				FVector XDir, YDir;
+				Direction.FindBestAxisVectors(XDir, YDir);
+
+				TArray<FVertexID> Ring1, Ring2;
+
+				for (int32 j = 0; j < SegmentCount; j++)
+				{
+					float Angle = 2.0f * PI * j / SegmentCount;
+					FVector Offset = FMath::Cos(Angle) * XDir + FMath::Sin(Angle) * YDir;
+					FVector V1 = P1 + Offset * Radii->Get(OrderIndex) * 100.0f;
+					FVector V2 = P2 + Offset * Radii->Get(OrderIndex) * 100.0f;
+
+					FVertexID ID1 = StaticMeshDescription.CreateVertex();
+					FVertexID ID2 = StaticMeshDescription.CreateVertex();
+
+					StaticMeshDescription.SetVertexPosition(ID1, V1);
+					StaticMeshDescription.SetVertexPosition(ID2, V2);
+
+					Ring1.Add(ID1);
+					Ring2.Add(ID2);
+				}
+
+				for (int32 j = 0; j < SegmentCount; ++j)
+				{
+					int32 Next = (j + 1) % SegmentCount;
+
+					FVertexID V00 = Ring1[j];
+					FVertexID V01 = Ring2[j];
+					FVertexID V10 = Ring1[Next];
+					FVertexID V11 = Ring2[Next];
+
+					TArray<FVertexInstanceID> Tri1 = {
+						StaticMeshDescription.CreateVertexInstance(V00),
+						StaticMeshDescription.CreateVertexInstance(V01),
+						StaticMeshDescription.CreateVertexInstance(V10)
+					};
+
+					TArray<FVertexInstanceID> Tri2 = {
+						StaticMeshDescription.CreateVertexInstance(V10),
+						StaticMeshDescription.CreateVertexInstance(V01),
+						StaticMeshDescription.CreateVertexInstance(V11)
+					};
+
+					StaticMeshDescription.GetMeshDescription().CreatePolygon(PolygonGroupId, Tri1);
+					StaticMeshDescription.GetMeshDescription().CreatePolygon(PolygonGroupId, Tri2);
+				}
+
+				return;
+			}
+
+			else if (WireSets && PartIndex == (int)AxisPartClass::AxisPartClass_WIRE_SET)
+			{
+				const auto* WSet = WireSets->Get(OrderIndex);
+				const auto* Points = WSet->ps();
+
+				if (!Points || Points->size() < 2)
+					continue;
+
+				TArray<TArray<FVertexID>> Rings;
+
+				for (flatbuffers::uoffset_t p = 0; p < Points->size(); p++)
+				{
+					const auto& Pt = Points->Get(p);
+					FVector Pos = FVector(Pt->x(), Pt->z(), Pt->y()) * 100.0f;
+
+					// compute Tangent along polyline
+					FVector Tangent;
+					if (p == 0)
+					{
+						const auto& Next = Points->Get(p + 1);
+						Tangent = (FVector(Next->x(), Next->z(), Next->y()) * 100.0f - Pos).GetSafeNormal();
+					}
+					else if (p == Points->size() - 1)
+					{
+						const auto& Prev = Points->Get(p - 1);
+						Tangent = (Pos - FVector(Prev->x(), Prev->z(), Prev->y()) * 100.0f).GetSafeNormal();
+					}
+					else
+					{
+						const auto& Prev = Points->Get(p - 1);
+						const auto& Next = Points->Get(p + 1);
+						Tangent = (FVector(Next->x(), Next->z(), Next->y()) * 100.0f - FVector(Prev->x(), Prev->z(), Prev->y()) * 100.0f).GetSafeNormal();
+					}
+
+					// Frame
+					FVector XDir, YDir;
+					Tangent.FindBestAxisVectors(XDir, YDir);
+
+					TArray<FVertexID> Ring;
+					for (int32 j = 0; j < SegmentCount; j++)
+					{
+						float Angle = 2.0f * PI * j / SegmentCount;
+						FVector Offset = FMath::Cos(Angle) * XDir + FMath::Sin(Angle) * YDir;
+						FVector RingPos = Pos + Offset * Radii->Get(OrderIndex) * 100.0f;
+
+						FVertexID Vtx = StaticMeshDescription.CreateVertex();
+						StaticMeshDescription.SetVertexPosition(Vtx, RingPos);
+						Ring.Add(Vtx);
+					}
+
+					// Connect rings
+					for (int32 k = 0; k < Rings.Num() - 1; ++k)
+					{
+						const auto& RingA = Rings[k];
+						const auto& RingB = Rings[k + 1];
+
+						for (int32 j = 0; j < SegmentCount; ++j)
+						{
+							int32 Next = (j + 1) % SegmentCount;
+
+							FVertexID V00 = RingA[j];
+							FVertexID V01 = RingB[j];
+							FVertexID V10 = RingA[Next];
+							FVertexID V11 = RingB[Next];
+
+							TArray<FVertexInstanceID> Tri1 = {
+								MeshDescription.CreateVertexInstance(V00),
+								MeshDescription.CreateVertexInstance(V01),
+								MeshDescription.CreateVertexInstance(V10)
+							};
+
+							TArray<FVertexInstanceID> Tri2 = {
+								MeshDescription.CreateVertexInstance(V10),
+								MeshDescription.CreateVertexInstance(V01),
+								MeshDescription.CreateVertexInstance(V11)
+							};
+
+							MeshDescription.CreatePolygon(PolygonGroupId, Tri1);
+							MeshDescription.CreatePolygon(PolygonGroupId, Tri2);
+						}
+					}
+				}
+			}
+		}
+	}
+
+	FStaticMeshOperations::ComputeTriangleTangentsAndNormals(StaticMeshDescription.GetMeshDescription());
+	FStaticMeshOperations::ComputeTangentsAndNormals(StaticMeshDescription.GetMeshDescription(), EComputeNTBsFlags::Normals | EComputeNTBsFlags::Tangents);
+}
+
+void UFragmentsImporter::BuildLineOnlyMesh(UStaticMeshDescription& StaticMeshDescription, const CircleExtrusion* CircleExtrusion)
+{
+	FStaticMeshAttributes Attributes(StaticMeshDescription.GetMeshDescription());
+	Attributes.Register();
+	const FPolygonGroupID PolygonGroupId = StaticMeshDescription.CreatePolygonGroup();
+	FMeshDescription& MeshDescription = StaticMeshDescription.GetMeshDescription();
+
+	const auto* Axes = CircleExtrusion->axes();
+	if (!Axes) return;
+
+	for (auto Axis : *Axes)
+	{
+		const auto* Orders = Axis->order();
+		const auto* Wires = Axis->wires();
+
+		for (uint32 i = 0; i < Orders->size(); ++i)
+		{
+			const auto* Wire = Wires->Get(Orders->Get(i));
+			FVector P1 = FVector(Wire->p1().x(), Wire->p1().z(), Wire->p1().y()) * 100.0f;
+			FVector P2 = FVector(Wire->p2().x(), Wire->p2().z(), Wire->p2().y()) * 100.0f;
+
+			FVertexID V0 = StaticMeshDescription.CreateVertex();
+			FVertexID V1 = StaticMeshDescription.CreateVertex();
+			StaticMeshDescription.SetVertexPosition(V0, P1);
+			StaticMeshDescription.SetVertexPosition(V1, P2);
+
+			TArray<FVertexInstanceID> Tri;
+			FVertexInstanceID I0 = StaticMeshDescription.CreateVertexInstance(V0);
+			FVertexInstanceID I1 = StaticMeshDescription.CreateVertexInstance(V1);
+			FVertexInstanceID I2 = StaticMeshDescription.CreateVertexInstance(V1); // degenerate triangle
+			Tri.Add(I0);
+			Tri.Add(I1);
+			Tri.Add(I2);
+
+			StaticMeshDescription.GetMeshDescription().CreatePolygon(PolygonGroupId, Tri,{});
+		}
+	}
+}
+
+TArray<FVector> UFragmentsImporter::SampleRingPoints(const FVector& Center, const FVector XDir, const FVector& YDir, float Radius, int SegmentCount, float ApertureRadians)
+{
+	TArray<FVector> Ring;
+	for (int32 i = 0; i <= SegmentCount; i++)
+	{
+		float t = (float)i / SegmentCount;
+		float angle = -ApertureRadians / 2.0f + t * ApertureRadians;
+		FVector Point = Center + Radius * (FMath::Cos(angle) * XDir + FMath::Sin(angle) * YDir);
+		Ring.Add(Point);
+	}
+	return Ring;
 }

@@ -145,6 +145,12 @@ private:
 		TArray<FVector>& OutVertices,
 		TArray<int32>& OutIndices);
 
+	void BuildFullCircleExtrusion(UStaticMeshDescription& StaticMeshDescription, const CircleExtrusion* CircleExtrusion, const Material* RefMaterial, UStaticMesh* StaticMesh);
+
+	void BuildLineOnlyMesh(UStaticMeshDescription& StaticMeshDescription, const CircleExtrusion* CircleExtrusion);
+
+	TArray<FVector> SampleRingPoints(const FVector& Center, const FVector XDir, const FVector& YDir, float Radius, int SegmentCount, float ApertureRadians);
+
 	// Create projection axes for an arbitrary polygon
 	FPlaneProjection BuildProjectionPlane(const TArray<FVector>& Points, const TArray<int32>& Profile)
 	{
