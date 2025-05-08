@@ -17,6 +17,7 @@
 #include "CompGeom/PolygonTriangulation.h"
 #include "tesselator.h"
 #include "Algo/Reverse.h"
+#include <Utils/FragmentsUtils.h>
 
 void UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath)
 {
@@ -97,7 +98,7 @@ void UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath)
 		UE_LOG(LogTemp, Log, TEXT("Data appears uncompressed, using raw data"));
 	}
 
-	const Model* ModelRef = GetModel(Decompressed.GetData());
+	ModelRef = GetModel(Decompressed.GetData());
 	//PrintModelStructure(ModelRef);
 
 	if (!ModelRef)
@@ -109,12 +110,22 @@ void UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath)
 	BaseGlassMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/FragmentsUnreal/Materials/M_BaseFragmentGlassMaterial.M_BaseFragmentGlassMaterial"));
 	BaseMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/FragmentsUnreal/Materials/M_BaseFragmentMaterial.M_BaseFragmentMaterial"));
 
+	const auto* geometries = ModelRef->geometries();
+	const auto* attributes = ModelRef->attributes();
+	const auto* aligments = ModelRef->alignments();
+	const auto* categories = ModelRef->categories();
+	const auto* guid = ModelRef->guid();
+	const auto* guids = ModelRef->guids();
+	const auto* guids_items = ModelRef->guids_items();
+	const auto* local_ids = ModelRef->local_ids();
+	const auto max_local_id = ModelRef->max_local_id();
+	const auto* relations = ModelRef->relations();
+	const auto* spatial_structure = ModelRef->spatial_structure();
+	const auto* _meshes = ModelRef->meshes();
 
 	// Loop through samples and spawn meshes
-	const auto* _meshes = ModelRef->meshes();
 	if (_meshes)
 	{
-
 		const auto* samples = _meshes->samples();
 		const auto* representations = _meshes->representations();
 		const auto* coordinates = _meshes->coordinates();
@@ -125,48 +136,79 @@ void UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath)
 		const auto* local_tranforms = _meshes->local_transforms();
 		const auto* global_transforms = _meshes->global_transforms();
 
-		// samples: includes representations,
-		for (flatbuffers::uoffset_t i = 0; i < samples->size(); i++)
+		// Grouping samples by Item ID
+		TMap<int32, TArray<const Sample*>> SamplesByItem;
+		for (flatbuffers::uoffset_t i = 0; i < samples->size(); i++) 
 		{
 			const auto* sample = samples->Get(i);
-			const auto mesh = meshes_items->Get(sample->item());
-			const auto* material = materials->Get(sample->material());
-			const auto* representation = representations->Get(sample->representation());
-			const auto* local_transform = local_tranforms->Get(sample->local_transform());
-			const auto* global_transform = global_transforms->Get(mesh); // testing getting the global transform based on the mesh item
-			UStaticMesh* Mesh = nullptr;
+			SamplesByItem.FindOrAdd(sample->item()).Add(sample);
+		}
 
-			FString Name = FString::Printf(TEXT("frag_%d"), i);
-			if (representation->representation_class() == RepresentationClass::RepresentationClass_SHELL)
+		for (const auto& Item : SamplesByItem)
+		{
+			int32 ItemId = Item.Key;
+			const TArray<const Sample*> ItemSamples = Item.Value;
+
+			const auto mesh = meshes_items->Get(ItemId);
+			const auto local_id = local_ids->Get(ItemId);
+			const auto* global_transform = global_transforms->Get(mesh);
+			FTransform GlobalTransform = UFragmentsUtils::MakeTransform(global_transform);
+
+			AActor* ItemActor = OwnerRef->GetWorld()->SpawnActor<AActor>(
+				AActor::StaticClass(), GlobalTransform);
+			ItemActor->SetActorLabel(FString::Printf(TEXT("ia_%d"), local_id));
+
+			// Create a default root component
+			USceneComponent* RootSceneComponent = NewObject<USceneComponent>(ItemActor);
+			RootSceneComponent->RegisterComponent();
+			ItemActor->SetRootComponent(RootSceneComponent);
+			RootSceneComponent->SetMobility(EComponentMobility::Movable);
+
+			ItemActor->SetActorTransform(GlobalTransform);
+
+			for (int32 i = 0; i < ItemSamples.Num(); i++)
 			{
-				const auto* shell = shells->Get(representation->id());
-				Mesh = CreateStaticMeshFromShell(shell, material, *Name, TEXT("/Game/Fragments"));
+				const Sample* sample = ItemSamples[i];
+				const auto* material = materials->Get(sample->material());
+				const auto* representation = representations->Get(sample->representation());
+				const auto* local_transform = local_tranforms->Get(sample->local_transform());
+				FTransform LocalTransform = UFragmentsUtils::MakeTransform(local_transform);
+
+				UStaticMesh* Mesh = nullptr;
+				FString MeshName = FString::Printf(TEXT("sample_%d_%d"), local_id, i);
+
+				if (representation->representation_class() == RepresentationClass::RepresentationClass_SHELL)
+				{
+					const auto* shell = shells->Get(representation->id());
+					Mesh = CreateStaticMeshFromShell(shell, material, *MeshName, TEXT("/Game/Fragments"));
+					
+				}
+				else if (representation->representation_class() == RepresentationClass_CIRCLE_EXTRUSION)
+				{
+					const auto* circleExtrusion = cirle_extrusions->Get(representation->id());
+					Mesh = CreateStaticMeshFromCircleExtrusion(circleExtrusion, material, *MeshName, TEXT("/Game/Fragments"));
+				}
+
 				if (Mesh)
 				{
-					SpawnStaticMesh(Mesh,local_transform, global_transform, OwnerRef->GetWorld(), FName(TEXT("shell")));
+					// Add StaticMeshComponent to parent actor
+					UStaticMeshComponent* MeshComp = NewObject<UStaticMeshComponent>(ItemActor);
+					MeshComp->SetStaticMesh(Mesh);
+					MeshComp->SetRelativeTransform(LocalTransform); // local to parent
+					MeshComp->AttachToComponent(RootSceneComponent, FAttachmentTransformRules::KeepRelativeTransform);
+					MeshComp->RegisterComponent();
+					ItemActor->AddInstanceComponent(MeshComp);
+				}
+			}
 
-				}
-			}
-			else if (representation->representation_class() == RepresentationClass_CIRCLE_EXTRUSION)
-			{
-				const auto* circleExtrusion = cirle_extrusions->Get(representation->id());
-				Mesh = CreateStaticMeshFromCircleExtrusion(circleExtrusion, material, *Name, TEXT("/Game/Fragments"));
-				if (Mesh)
-				{
-					SpawnStaticMesh(Mesh, local_transform, global_transform, OwnerRef->GetWorld(), FName(TEXT("circle_extrussion")));
-				}
-			}
-			else
-			{
-				
-			}
 		}
 	}
 }
 
-void UFragmentsImporter::SpawnStaticMesh(UStaticMesh* StaticMesh,const Transform* LocalTransform, const Transform* GlobalTransform, UWorld* World, FName OptionalTag)
+void UFragmentsImporter::SpawnStaticMesh(UStaticMesh* StaticMesh,const Transform* LocalTransform, const Transform* GlobalTransform, AActor* Owner, FName OptionalTag)
 {
-	if (!StaticMesh || !LocalTransform || !GlobalTransform || !World) return;
+	if (!StaticMesh || !LocalTransform || !GlobalTransform || !Owner) return;
+
 
 	// Convert Fragments transform → Unreal FTransform
 	FVector Local(LocalTransform->position().x() * 100, LocalTransform->position().z() * 100, LocalTransform->position().y() * 100); // Fix z-up and Unreal units
@@ -201,7 +243,7 @@ void UFragmentsImporter::SpawnStaticMesh(UStaticMesh* StaticMesh,const Transform
 	FTransform Transform(Rot, Pos, FinalScale);
 
 	// Step 1: Spawn StaticMeshActor
-	AStaticMeshActor* MeshActor = World->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), Transform);
+	AStaticMeshActor* MeshActor = Owner->GetWorld()->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), Transform);
 
 	if (MeshActor == nullptr)
 	{
@@ -356,8 +398,8 @@ UStaticMesh* UFragmentsImporter::CreateStaticMeshFromShell(const Shell* ShellRef
 
 			TArray<TArray<FVector>> ProfileHolesPoints;
 
-			UE_LOG(LogTemp, Log, TEXT("Profile %d has %d points and %d holes"),
-				i, Indices->size(), ProfileHolesIdx.Contains(i) ? ProfileHolesIdx[i].Num() : 0);
+			/*UE_LOG(LogTemp, Log, TEXT("Profile %d has %d points and %d holes"),
+				i, Indices->size(), ProfileHolesIdx.Contains(i) ? ProfileHolesIdx[i].Num() : 0);*/
 
 			TArray<int32> OutIndices;
 			TArray<FVector> OutVertices;
@@ -562,7 +604,7 @@ bool UFragmentsImporter::TriangulatePolygonWithHoles(const TArray<FVector>& Poin
 
 			// Fix winding
 			bool bClockwise = IsClockwise(Projected);
-			UE_LOG(LogTemp, Log, TEXT("Contour winding is %s"), bClockwise ? TEXT("CW") : TEXT("CCW"));
+			//UE_LOG(LogTemp, Log, TEXT("Contour winding is %s"), bClockwise ? TEXT("CW") : TEXT("CCW"));
 
 			if (!bIsHole && bClockwise)
 			{
@@ -629,7 +671,7 @@ bool UFragmentsImporter::TriangulatePolygonWithHoles(const TArray<FVector>& Poin
 	}
 	const int32* Indices = tessGetElements(Tess);
 	const int32 ElementCount = tessGetElementCount(Tess);
-	UE_LOG(LogTemp, Log, TEXT("Tessellated VertexCount: %d, ElementCount: %d"), VertexCount, ElementCount);
+	//UE_LOG(LogTemp, Log, TEXT("Tessellated VertexCount: %d, ElementCount: %d"), VertexCount, ElementCount);
 
 	for (int32 i = 0; i < ElementCount; ++i)
 	{

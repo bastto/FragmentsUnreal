@@ -123,7 +123,7 @@ public:
 
 private:
 
-	void SpawnStaticMesh(UStaticMesh* StaticMesh, const Transform* LocalTransform, const Transform* GlobalTransform, UWorld* World, FName OptionalTag = FName());
+	void SpawnStaticMesh(UStaticMesh* StaticMesh, const Transform* LocalTransform, const Transform* GlobalTransform, AActor* Owner, FName OptionalTag = FName());
 	UStaticMesh* CreateStaticMeshFromShell(
 		const Shell* ShellRef,
 		const Material* RefMaterial,
@@ -215,5 +215,7 @@ private:
 	
 	UPROPERTY()
 	UMaterialInterface* BaseGlassMaterial = nullptr;
+
+	const Model* ModelRef = nullptr;
 
 };
