@@ -43,9 +43,6 @@ public class FragmentsUnreal : ModuleRules
 			{
 				"Projects",
 				"InputCore",
-				"EditorFramework",
-				"UnrealEd",
-				"ToolMenus",
 				"CoreUObject",
 				"Engine",
 				"Slate",

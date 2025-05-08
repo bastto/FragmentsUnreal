@@ -7,7 +7,6 @@
 #include "ThirdParty/zlib/1.2.13/include/zlib.h"
 #include "ProceduralMeshComponent.h"
 #include "Engine/StaticMeshActor.h"
-#include "RawMesh.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "StaticMeshDescription.h"
 #include <StaticMeshOperations.h>
@@ -156,7 +155,7 @@ void UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath)
 
 			AActor* ItemActor = OwnerRef->GetWorld()->SpawnActor<AActor>(
 				AActor::StaticClass(), GlobalTransform);
-			ItemActor->SetActorLabel(FString::Printf(TEXT("ia_%d"), local_id));
+			//ItemActor->SetActorLabel(FString::Printf(TEXT("ia_%d"), local_id));
 
 			// Create a default root component
 			USceneComponent* RootSceneComponent = NewObject<USceneComponent>(ItemActor);
@@ -477,17 +476,18 @@ UStaticMesh* UFragmentsImporter::CreateStaticMeshFromCircleExtrusion(const Circl
 	MeshParams.bUseHashAsGuid = false;
 
 	StaticMesh->BuildFromMeshDescriptions(MeshDescriptionPtrs, MeshParams);
-	
-	if (StaticMesh->GetNumSourceModels() >= 3)
-	{
-		StaticMesh->GetSourceModel(0).ScreenSize.Default = 1.0f;
-		StaticMesh->GetSourceModel(1).ScreenSize.Default = 0.5f;
-		StaticMesh->GetSourceModel(2).ScreenSize.Default = 0.1f;
-	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Unexpected: Only %d LODs were created!"), StaticMesh->GetNumSourceModels());
-	}
+
+	// THIS IS EDITOR ONLY. TO DO: Find the way to make it in Runtime??
+	//if (StaticMesh->GetNumSourceModels() >= 3)
+	//{
+	//	StaticMesh->GetSourceModel(0).ScreenSize.Default = 1.0f;
+	//	StaticMesh->GetSourceModel(1).ScreenSize.Default = 0.5f;
+	//	StaticMesh->GetSourceModel(2).ScreenSize.Default = 0.1f;
+	//}
+	//else
+	//{
+	//	UE_LOG(LogTemp, Warning, TEXT("Unexpected: Only %d LODs were created!"), StaticMesh->GetNumSourceModels());
+	//}
 	FAssetRegistryModule::AssetCreated(StaticMesh);
 	return StaticMesh;
 }
