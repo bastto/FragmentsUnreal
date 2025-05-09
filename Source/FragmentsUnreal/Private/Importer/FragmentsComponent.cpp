@@ -20,6 +20,7 @@ UFragmentsComponent::UFragmentsComponent()
 void UFragmentsComponent::BeginPlay()
 {
 	Super::BeginPlay();
+	FragmentsImporter = NewObject<UFragmentsImporter>(this);
 
 	// ...
 	
@@ -36,8 +37,16 @@ void UFragmentsComponent::TickComponent(float DeltaTime, ELevelTick TickType, FA
 
 void UFragmentsComponent::TestImportFragmentFile(const FString& Path)
 {
-	UFragmentsImporter* FragmentsImporter = NewObject<UFragmentsImporter>(this);
-	FragmentsImporter->Process(GetOwner(), Path);
+	if (FragmentsImporter)
+		FragmentsImporter->Process(GetOwner(), Path);
+}
+
+TArray<class AFragment*> UFragmentsComponent::GetFragmentActors()
+{
+	if (FragmentsImporter)
+		return FragmentsImporter->FragmentActors;
+
+	return TArray<class AFragment*>();
 }
 
 

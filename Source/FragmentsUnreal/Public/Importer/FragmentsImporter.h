@@ -55,61 +55,9 @@ private:
 
 	TArray<FVector> SampleRingPoints(const FVector& Center, const FVector XDir, const FVector& YDir, float Radius, int SegmentCount, float ApertureRadians);
 
-	// Create projection axes for an arbitrary polygon
-	//FPlaneProjection BuildProjectionPlane(const TArray<FVector>& Points, const TArray<int32>& Profile)
-	//{
-	//	FPlaneProjection Projection;
+	// variables
 
-	//	if (Profile.Num() < 3)
-	//		return Projection;
-
-	//	const FVector A = Points[Profile[0]];
-	//	FVector B, C;
-	//	bool bFound = false;
-
-	//	for (int32 i = 1; i < Profile.Num() - 1; ++i)
-	//	{
-	//		B = Points[Profile[i]];
-	//		C = Points[Profile[i + 1]];
-
-	//		FVector Normal = FVector::CrossProduct(B - A, C - A);
-	//		if (!Normal.IsNearlyZero())
-	//		{
-	//			Normal.Normalize();
-	//			FVector AxisX = (B - A).GetSafeNormal();
-	//			FVector AxisY = FVector::CrossProduct(Normal, AxisX).GetSafeNormal();
-
-	//			Projection.Origin = A;
-	//			Projection.AxisX = AxisX;
-	//			Projection.AxisY = AxisY;
-	//			bFound = true;
-	//			break;
-	//		}
-	//	}
-
-	//	if (!bFound)
-	//	{
-	//		// Fallback: default projection
-	//		UE_LOG(LogTemp, Error, TEXT("Failed to find non-collinear points in profile! Projection may be invalid."));
-	//		Projection.Origin = A;
-	//		Projection.AxisX = FVector(1, 0, 0);
-	//		Projection.AxisY = FVector(0, 1, 0);
-	//	}
-
-	//	return Projection;
-	//}
-
-	/*bool IsClockwise(const TArray<FVector2D>& Points)
-	{
-		float Area = 0.0f;
-		for (int32 i = 0; i < Points.Num(); ++i)
-		{
-			const FVector2D& p0 = Points[i];
-			const FVector2D& p1 = Points[(i + 1) % Points.Num()];
-			Area += (p1.X - p0.X) * (p1.Y + p0.Y);
-		}
-		return Area > 0.0;
-	}*/
+private:
 
 	UPROPERTY()
 	AActor* OwnerRef = nullptr;
@@ -121,5 +69,9 @@ private:
 	UMaterialInterface* BaseGlassMaterial = nullptr;
 
 	const Model* ModelRef = nullptr;
+
+public:
+
+	TArray<class AFragment*> FragmentActors;
 
 };

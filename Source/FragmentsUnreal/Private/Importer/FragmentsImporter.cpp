@@ -237,6 +237,7 @@ void UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath)
 	// 
 	//---------
 
+	
 	// Loop through samples and spawn meshes
 	if (_meshes)
 	{
@@ -271,7 +272,6 @@ void UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath)
 			const auto* category = categories->Get(ItemId);
 			const auto* item_guid = guids->Get(ItemId);
 
-
 			const auto* global_transform = global_transforms->Get(mesh);
 			FTransform GlobalTransform = UFragmentsUtils::MakeTransform(global_transform);
 
@@ -301,6 +301,12 @@ void UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath)
 
 			// Local_id
 			FragmentActor->SetLocalId(local_id);
+
+			// Model guid
+			const char* RawModelGuid = guid->c_str();
+			FString ModelGuidStr = UTF8_TO_TCHAR(RawModelGuid);
+			FragmentActor->SetModelGuid(ModelGuidStr);
+
 			//ItemActor->Tags.Add(FName(FString::FromInt(local_id)));
 
 			//ItemActor->SetActorLabel(FString::Printf(TEXT("ia_%d"), local_id));
@@ -350,6 +356,7 @@ void UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath)
 				}
 			}
 
+			FragmentActors.Add(FragmentActor);
 		}
 	}
 }

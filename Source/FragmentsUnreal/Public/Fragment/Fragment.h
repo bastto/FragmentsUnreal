@@ -24,6 +24,12 @@ public:
 	virtual void Tick(float DeltaTime) override;
 
 	UFUNCTION(BlueprintCallable, Category = "Fragments")
+	void SetModelGuid(const FString& InModelGuid) { ModelGuid = InModelGuid; }
+
+	UFUNCTION(BlueprintCallable, Category = "Fragments")
+	FString GetModelGuid() const { return ModelGuid; }
+
+	UFUNCTION(BlueprintCallable, Category = "Fragments")
 	void SetLocalId(const int32 InLocalId) { LocalId = InLocalId; }
 
 	UFUNCTION(BlueprintCallable, Category = "Fragments")
@@ -48,6 +54,9 @@ public:
 	TArray<struct FItemAttribute> GetAttributes() { return Attributes; }
 
 private:
+
+	UPROPERTY()
+	FString ModelGuid;
 
 	UPROPERTY()
 	int32 LocalId;

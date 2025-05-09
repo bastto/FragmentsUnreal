@@ -20,12 +20,18 @@ protected:
 	// Called when the game starts
 	virtual void BeginPlay() override;
 
+	UPROPERTY()
+	class UFragmentsImporter* FragmentsImporter = nullptr;
+
 public:	
 	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 	UFUNCTION(BlueprintCallable, Category = "Fragments|Importer")
 	void TestImportFragmentFile(const FString& Path);
+
+	UFUNCTION(BlueprintCallable, Category = "Fragments|Importer")
+	TArray<class AFragment*> GetFragmentActors();
 
 		
 	
