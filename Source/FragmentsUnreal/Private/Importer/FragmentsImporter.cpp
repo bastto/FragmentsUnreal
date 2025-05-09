@@ -17,6 +17,9 @@
 #include "tesselator.h"
 #include "Algo/Reverse.h"
 #include <Utils/FragmentsUtils.h>
+#include "Fragment/Fragment.h"
+
+DEFINE_LOG_CATEGORY(LogFragments);
 
 void UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath)
 {
@@ -28,14 +31,14 @@ void UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath)
 
 	if (!FFileHelper::LoadFileToArray(CompressedData, *FragPath))
 	{
-		UE_LOG(LogTemp, Error, TEXT("Failed to load the compressed file"));
+		UE_LOG(LogFragments, Error, TEXT("Failed to load the compressed file"));
 		return;
 	}
 
 	if (CompressedData.Num() >= 2 && CompressedData[0] == 0x78)
 	{
 		bIsCompressed = true;
-		UE_LOG(LogTemp, Log, TEXT("Zlib header detected. Starting decompression..."));
+		UE_LOG(LogFragments, Log, TEXT("Zlib header detected. Starting decompression..."));
 	}
 
 	if (bIsCompressed)
@@ -48,11 +51,11 @@ void UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath)
 		int32 ret = inflateInit(&stream);
 		if (ret != Z_OK)
 		{
-			UE_LOG(LogTemp, Error, TEXT("zlib initialization failed: %d"), ret);
+			UE_LOG(LogFragments, Error, TEXT("zlib initialization failed: %d"), ret);
 			return;
 		}
 
-		UE_LOG(LogTemp, Log, TEXT("Starting decompression..."));
+		UE_LOG(LogFragments, Log, TEXT("Starting decompression..."));
 
 		const int32 ChunkSize = 1024 * 1024;
 		int32 TotalOut = 0;
@@ -67,7 +70,7 @@ void UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath)
 			ret = inflate(&stream, Z_NO_FLUSH);
 
 			// Log out more detailed information for debugging
-			UE_LOG(LogTemp, Log, TEXT("Decompressing chunk %d: avail_in = %d, avail_out = %d, ret = %d"), i, stream.avail_in, stream.avail_out, ret);
+			UE_LOG(LogFragments, Log, TEXT("Decompressing chunk %d: avail_in = %d, avail_out = %d, ret = %d"), i, stream.avail_in, stream.avail_out, ret);
 
 			if (ret == Z_STREAM_END)
 			{
@@ -76,7 +79,7 @@ void UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath)
 			}
 			else if (ret != Z_OK)
 			{
-				UE_LOG(LogTemp, Error, TEXT("Decompression failed with error code: %d"), ret);
+				UE_LOG(LogFragments, Error, TEXT("Decompression failed with error code: %d"), ret);
 				break;
 			}
 		}
@@ -84,17 +87,17 @@ void UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath)
 		ret = inflateEnd(&stream);
 		if (ret != Z_OK)
 		{
-			UE_LOG(LogTemp, Error, TEXT("zlib end stream failed: %d"), ret);
+			UE_LOG(LogFragments, Error, TEXT("zlib end stream failed: %d"), ret);
 			return;
 		}
 
 		Decompressed.SetNum(TotalOut);
-		UE_LOG(LogTemp, Log, TEXT("Decompression complete. Total bytes: %d"), TotalOut);
+		UE_LOG(LogFragments, Log, TEXT("Decompression complete. Total bytes: %d"), TotalOut);
 	}
 	else
 	{
 		Decompressed = CompressedData;
-		UE_LOG(LogTemp, Log, TEXT("Data appears uncompressed, using raw data"));
+		UE_LOG(LogFragments, Log, TEXT("Data appears uncompressed, using raw data"));
 	}
 
 	ModelRef = GetModel(Decompressed.GetData());
@@ -102,7 +105,7 @@ void UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath)
 
 	if (!ModelRef)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Failed to parse Fragments model"));
+		UE_LOG(LogFragments, Error, TEXT("Failed to parse Fragments model"));
 		return;
 	}
 
@@ -111,6 +114,7 @@ void UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath)
 
 	const auto* geometries = ModelRef->geometries();
 	const auto* attributes = ModelRef->attributes();
+	
 	const auto* aligments = ModelRef->alignments();
 	const auto* categories = ModelRef->categories();
 	const auto* guid = ModelRef->guid();
@@ -119,8 +123,119 @@ void UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath)
 	const auto* local_ids = ModelRef->local_ids();
 	const auto max_local_id = ModelRef->max_local_id();
 	const auto* relations = ModelRef->relations();
+	const auto* relations_items = ModelRef->relations_items();
 	const auto* spatial_structure = ModelRef->spatial_structure();
 	const auto* _meshes = ModelRef->meshes();
+
+	// DEBUG AREA
+
+	// aligments
+	if (aligments)
+	{
+		for (flatbuffers::uoffset_t i = 0; i < aligments->size(); i++)
+		{
+			const auto* aligment = aligments->Get(i);
+			UE_LOG(LogFragments, Log, TEXT("Aligment %d: %d"), i, aligment->absolute());
+		}
+	}
+
+	// attributes
+	for (flatbuffers::uoffset_t i = 0; i < attributes->size(); i++)
+	{
+		const auto* a = attributes->Get(i);
+		TArray<FItemAttribute> ItemAttributes = UFragmentsUtils::ParseItemAttribute(a);
+		UE_LOG(LogFragments, Log, TEXT("Attribute: %d"), i);
+		for (const FItemAttribute& A : ItemAttributes)
+		{
+			UE_LOG(LogFragments, Log, TEXT("\t%s: %s"), *A.Key, *A.Value);
+			UE_LOG(LogFragments, Log, TEXT("\tTypeHash: %d"), A.TypeHash);
+		}
+	}
+
+	// Realations
+
+	//		Relation: 0
+	//		LogFragments : Relation 0 : ["OwnerHistory", 41]
+	//		LogFragments : Relation 1 : ["RepresentationContexts", 111]
+	//		LogFragments : Relation 2 : ["UnitsInContext", 106]
+	//		LogFragments : Relation 3 : ["IsDecomposedBy", 148]
+	//		LogFragments : Relation : 1
+	//		LogFragments : Relation 0 : ["OwnerHistory", 41]
+	//		LogFragments : Relation 1 : ["BuildingAddress", 125]
+	//		LogFragments : Relation 2 : ["Decomposes", 148]
+	//		LogFragments : Relation 3 : ["IsDecomposedBy", 138, 144]
+	//		LogFragments : Relation 4 : ["IsDefinedBy", 24544]
+
+	TMap<int32, TArray<int32>> LocalToAttributeIds;
+	for (flatbuffers::uoffset_t i = 0; i < relations->size(); i++)
+	{
+		UE_LOG(LogFragments, Log, TEXT("Relation: %d"), i);
+		const auto* relation = relations->Get(i);
+
+		for (flatbuffers::uoffset_t j = 0; j < relation->data()->size(); j++)
+		{
+			if (relation && relation->data() && relation->data()->Get(j)) {
+				const char* RawStr = relation->data()->Get(j)->c_str();
+				FString Cleaned = UTF8_TO_TCHAR(RawStr);
+				UE_LOG(LogFragments, Log, TEXT("\tData %d: %s"), j, *Cleaned);
+
+				TArray<FString> Tokens;
+				Cleaned.Replace(TEXT("["), TEXT(""))
+					.Replace(TEXT("]"), TEXT(""))
+					.ParseIntoArray(Tokens, TEXT(","), true);
+
+				if (Tokens.Num() >= 2)
+				{
+					FString Name = Tokens[0].TrimStartAndEnd().Replace(TEXT("\""), TEXT(""));
+					int32 AttributeId = FCString::Atoi(*Tokens[1].TrimStartAndEnd());
+
+					if (Name.Equals(TEXT("IsDefinedBy")))
+					{
+
+					}
+
+					//LocalIdToAttributes.FindOrAdd(LocalId).Add(Key, Value);
+				}
+			}
+		}
+	}
+
+	// relations items
+
+	//		LogFragments: relation_item 0 : 119
+	//		LogFragments : relation_item 1 : 129 -> (this is the local_id)
+	//		LogFragments : relation_item 2 : 138
+	//		LogFragments : relation_item 3 : 144
+	//		LogFragments : relation_item 4 : 148
+	//		LogFragments : relation_item 5 : 186
+	//		LogFragments : relation_item 6 : 222
+	//		LogFragments : relation_item 7 : 224
+	//		LogFragments : relation_item 8 : 225
+	//		LogFragments : relation_item 9 : 226
+	//		LogFragments : relation_item 10 : 231
+	//		LogFragments : relation_item 11 : 232
+	//		LogFragments : relation_item 12 : 235
+	//		LogFragments : relation_item 13 : 241
+	//		LogFragments : relation_item 14 : 244
+	//		LogFragments : relation_item 15 : 250
+	//		LogFragments : relation_item 16 : 253
+	//		LogFragments : relation_item 17 : 257
+	//		LogFragments : relation_item 18 : 294
+	//		LogFragments : relation_item 19 : 297
+	//		LogFragments : relation_item 20 : 298
+	//		LogFragments : relation_item 21 : 301
+	//		LogFragments : relation_item 22 : 303
+
+	for (flatbuffers::uoffset_t i = 0; i < relations_items->size(); i++)
+	{
+		const auto relations_item = relations_items->Get(i);
+		UE_LOG(LogFragments, Log, TEXT("relation_item %d: %d"), i, relations_item);
+	}
+
+	UFragmentsUtils::PrintSpatialStructure(spatial_structure);
+
+	// 
+	//---------
 
 	// Loop through samples and spawn meshes
 	if (_meshes)
@@ -146,24 +261,59 @@ void UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath)
 		for (const auto& Item : SamplesByItem)
 		{
 			int32 ItemId = Item.Key;
+
+
 			const TArray<const Sample*> ItemSamples = Item.Value;
 
 			const auto mesh = meshes_items->Get(ItemId);
 			const auto local_id = local_ids->Get(ItemId);
+			const auto* attribute = attributes->Get(ItemId);
+			const auto* category = categories->Get(ItemId);
+			const auto* item_guid = guids->Get(ItemId);
+
+
 			const auto* global_transform = global_transforms->Get(mesh);
 			FTransform GlobalTransform = UFragmentsUtils::MakeTransform(global_transform);
 
-			AActor* ItemActor = OwnerRef->GetWorld()->SpawnActor<AActor>(
-				AActor::StaticClass(), GlobalTransform);
+			AFragment* FragmentActor = OwnerRef->GetWorld()->SpawnActor<AFragment>(
+				AFragment::StaticClass(), GlobalTransform);
+
+			// Attributes
+			TArray<FItemAttribute> ItemAttributes = UFragmentsUtils::ParseItemAttribute(attribute);
+			FragmentActor->SetAttributes(ItemAttributes);
+			/*for (const FItemAttribute& A : ItemAttributes)
+			{
+				FString AttributeAsTag = FString::Printf(TEXT("%s_%s"), *A.Key, *A.Value);
+				ItemActor->Tags.Add(FName(AttributeAsTag));
+			}*/
+
+			// Category
+			const char* RawCategory = category->c_str();
+			FString CategorySty = UTF8_TO_TCHAR(RawCategory);
+			FragmentActor->SetCategory(CategorySty);
+			//ItemActor->Tags.Add(FName(CategorySty));
+
+			// Guids
+			const char* RawGuid = item_guid->c_str();
+			FString GuidStr = UTF8_TO_TCHAR(RawGuid);
+			FragmentActor->SetGuid(GuidStr);
+			//ItemActor->Tags.Add(FName(GuidStr));
+
+			// Local_id
+			FragmentActor->SetLocalId(local_id);
+			//ItemActor->Tags.Add(FName(FString::FromInt(local_id)));
+
 			//ItemActor->SetActorLabel(FString::Printf(TEXT("ia_%d"), local_id));
 
 			// Create a default root component
-			USceneComponent* RootSceneComponent = NewObject<USceneComponent>(ItemActor);
+			USceneComponent* RootSceneComponent = NewObject<USceneComponent>(FragmentActor);
 			RootSceneComponent->RegisterComponent();
-			ItemActor->SetRootComponent(RootSceneComponent);
+			FragmentActor->SetRootComponent(RootSceneComponent);
 			RootSceneComponent->SetMobility(EComponentMobility::Movable);
 
-			ItemActor->SetActorTransform(GlobalTransform);
+			FragmentActor->SetActorTransform(GlobalTransform);
+
+			FragmentActor->AttachToActor(OwnerRef, FAttachmentTransformRules::KeepWorldTransform);
 
 			for (int32 i = 0; i < ItemSamples.Num(); i++)
 			{
@@ -191,12 +341,12 @@ void UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath)
 				if (Mesh)
 				{
 					// Add StaticMeshComponent to parent actor
-					UStaticMeshComponent* MeshComp = NewObject<UStaticMeshComponent>(ItemActor);
+					UStaticMeshComponent* MeshComp = NewObject<UStaticMeshComponent>(FragmentActor);
 					MeshComp->SetStaticMesh(Mesh);
 					MeshComp->SetRelativeTransform(LocalTransform); // local to parent
 					MeshComp->AttachToComponent(RootSceneComponent, FAttachmentTransformRules::KeepRelativeTransform);
 					MeshComp->RegisterComponent();
-					ItemActor->AddInstanceComponent(MeshComp);
+					FragmentActor->AddInstanceComponent(MeshComp);
 				}
 			}
 
@@ -246,7 +396,7 @@ void UFragmentsImporter::SpawnStaticMesh(UStaticMesh* StaticMesh,const Transform
 
 	if (MeshActor == nullptr)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Failed to spawn StaticMeshActor."));
+		UE_LOG(LogFragments, Error, TEXT("Failed to spawn StaticMeshActor."));
 		return;
 	}
 
@@ -364,7 +514,7 @@ UStaticMesh* UFragmentsImporter::CreateStaticMeshFromShell(const Shell* ShellRef
 					TriangleInstance.Add(MeshDescription.CreateVertexInstance(Vertices[Indice]));
 				}
 				else
-					UE_LOG(LogTemp, Log, TEXT("Invalid Indice: shell %s, profile %d, indice %d"), *AssetName, i, j);
+					UE_LOG(LogFragments, Log, TEXT("Invalid Indice: shell %s, profile %d, indice %d"), *AssetName, i, j);
 			}
 
 
@@ -380,7 +530,7 @@ UStaticMesh* UFragmentsImporter::CreateStaticMeshFromShell(const Shell* ShellRef
 			const auto* Indices = Profile->indices();
 			if (Indices->size() < 3)
 			{
-				UE_LOG(LogTemp, Error, TEXT("Profile %d skipped: fewer than 3 points"), i);
+				UE_LOG(LogFragments, Error, TEXT("Profile %d skipped: fewer than 3 points"), i);
 				continue;
 			}
 
@@ -404,7 +554,7 @@ UStaticMesh* UFragmentsImporter::CreateStaticMeshFromShell(const Shell* ShellRef
 			TArray<FVector> OutVertices;
 			if (!TriangulatePolygonWithHoles(PointsRef, ProfilePointsIndex, ProfileHolesIdx[i], OutVertices, OutIndices))
 			{
-				UE_LOG(LogTemp, Error, TEXT("Profile %d skipped: Triangulation failed"), i);
+				UE_LOG(LogFragments, Error, TEXT("Profile %d skipped: Triangulation failed"), i);
 				continue;
 			}
 
@@ -516,14 +666,14 @@ FName UFragmentsImporter::AddMaterialToMesh(UStaticMesh*& CreatedMesh, const Mat
 	}
 	if (!Material)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Unable to load Base Material"));
+		UE_LOG(LogFragments, Error, TEXT("Unable to load Base Material"));
 		return FName();
 	}
 
 	UMaterialInstanceDynamic* DynamicMaterial = UMaterialInstanceDynamic::Create(Material, CreatedMesh);
 	if (!DynamicMaterial)
 	{
-		UE_LOG(LogTemp, Error, TEXT("Failed to create dynamic material."));
+		UE_LOG(LogFragments, Error, TEXT("Failed to create dynamic material."));
 		return FName();
 	}
 
@@ -546,7 +696,7 @@ bool UFragmentsImporter::TriangulatePolygonWithHoles(const TArray<FVector>& Poin
 	TArray<int32>& OutIndices)
 {
 	TESStesselator* Tess = tessNewTess(nullptr);
-	FPlaneProjection Projection = BuildProjectionPlane(Points, Profiles);
+	FPlaneProjection Projection = UFragmentsUtils::BuildProjectionPlane(Points, Profiles);
 	
 	auto AddContour = [&](const TArray<int32>& Indices, bool bIsHole)
 		{
@@ -561,7 +711,7 @@ bool UFragmentsImporter::TriangulatePolygonWithHoles(const TArray<FVector>& Poin
 
 			if (Projected.Num() < 3)
 			{
-				UE_LOG(LogTemp, Error, TEXT("Contour has fewer than 3 points, skipping."));
+				UE_LOG(LogFragments, Error, TEXT("Contour has fewer than 3 points, skipping."));
 				return;
 			}
 
@@ -581,7 +731,7 @@ bool UFragmentsImporter::TriangulatePolygonWithHoles(const TArray<FVector>& Poin
 			}
 			if (bColinear)
 			{
-				UE_LOG(LogTemp, Error, TEXT("Contour is colinear in 2D projection, skipping."));
+				UE_LOG(LogFragments, Error, TEXT("Contour is colinear in 2D projection, skipping."));
 				return;
 			}
 
@@ -603,7 +753,7 @@ bool UFragmentsImporter::TriangulatePolygonWithHoles(const TArray<FVector>& Poin
 			}*/
 
 			// Fix winding
-			bool bClockwise = IsClockwise(Projected);
+			bool bClockwise = UFragmentsUtils::IsClockwise(Projected);
 			//UE_LOG(LogTemp, Log, TEXT("Contour winding is %s"), bClockwise ? TEXT("CW") : TEXT("CCW"));
 
 			if (!bIsHole && bClockwise)
@@ -634,7 +784,7 @@ bool UFragmentsImporter::TriangulatePolygonWithHoles(const TArray<FVector>& Poin
 
 	if (!tessTesselate(Tess, TESS_WINDING_ODD, TESS_POLYGONS, 3, 2, nullptr))
 	{
-		UE_LOG(LogTemp, Error, TEXT("tessTesselate failed."));
+		UE_LOG(LogFragments, Error, TEXT("tessTesselate failed."));
 		tessDeleteTess(Tess);
 		return false;
 	}
@@ -646,7 +796,7 @@ bool UFragmentsImporter::TriangulatePolygonWithHoles(const TArray<FVector>& Poin
 	{
 		for (const int32& P : Profiles)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("\tPoints of Vertex 0 X: %.6f, Y: %.6f, Z: %.6f"), Points[P].X, Points[P].Y, Points[P].Z);
+			UE_LOG(LogFragments, Warning, TEXT("\tPoints of Vertex 0 X: %.6f, Y: %.6f, Z: %.6f"), Points[P].X, Points[P].Y, Points[P].Z);
 		}
 
 		int32 HoleIdx = 0;
@@ -654,7 +804,7 @@ bool UFragmentsImporter::TriangulatePolygonWithHoles(const TArray<FVector>& Poin
 		{
 			for (const int32& P : H)
 			{
-				UE_LOG(LogTemp, Warning, TEXT("\tPoints of Hole %d 0 X: %.6f, Y: %.6f, Z: %.6f"), HoleIdx, Points[P].X, Points[P].Y, Points[P].Z);
+				UE_LOG(LogFragments, Warning, TEXT("\tPoints of Hole %d 0 X: %.6f, Y: %.6f, Z: %.6f"), HoleIdx, Points[P].X, Points[P].Y, Points[P].Z);
 			}
 			HoleIdx++;
 		}
