@@ -26,4 +26,18 @@ void AFragment::Tick(float DeltaTime)
 
 }
 
+AFragment* AFragment::FindFragmentByLocalId(int32 InLocalId)
+{
+	if (InLocalId == LocalId) return this;
+
+	AFragment* FoundFragment = nullptr;
+	for (AFragment*& F : FragmentChildren)
+	{
+		if (F->GetLocalId() == InLocalId) return F;
+
+		FoundFragment = F->FindFragmentByLocalId(InLocalId);
+	}
+	return FoundFragment;
+}
+
 

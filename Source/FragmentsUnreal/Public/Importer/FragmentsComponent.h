@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "Utils/FragmentsUtils.h"
 #include "FragmentsComponent.generated.h"
 
 
@@ -28,11 +29,13 @@ public:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 	UFUNCTION(BlueprintCallable, Category = "Fragments|Importer")
-	void TestImportFragmentFile(const FString& Path);
+	FString TestImportFragmentFile(const FString& Path, TArray<AFragment*>& OutFragments);
 
 	UFUNCTION(BlueprintCallable, Category = "Fragments|Importer")
 	TArray<class AFragment*> GetFragmentActors();
 
+	UFUNCTION(BlueprintCallable, Category = "Fragments|Importer")
+	TMap<FString, FSpatialStructure> GetSpatialStructures();
 		
 	
 };

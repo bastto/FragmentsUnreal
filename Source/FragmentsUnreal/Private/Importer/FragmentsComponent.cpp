@@ -35,10 +35,12 @@ void UFragmentsComponent::TickComponent(float DeltaTime, ELevelTick TickType, FA
 	// ...
 }
 
-void UFragmentsComponent::TestImportFragmentFile(const FString& Path)
+FString UFragmentsComponent::TestImportFragmentFile(const FString& Path, TArray<AFragment*>& OutFragments)
 {
 	if (FragmentsImporter)
-		FragmentsImporter->Process(GetOwner(), Path);
+		return FragmentsImporter->Process(GetOwner(), Path, OutFragments);
+
+	return FString();
 }
 
 TArray<class AFragment*> UFragmentsComponent::GetFragmentActors()
@@ -47,6 +49,14 @@ TArray<class AFragment*> UFragmentsComponent::GetFragmentActors()
 		return FragmentsImporter->FragmentActors;
 
 	return TArray<class AFragment*>();
+}
+
+TMap<FString, FSpatialStructure> UFragmentsComponent::GetSpatialStructures()
+{
+	if (FragmentsImporter)
+		return FragmentsImporter->GetSpatialStructures();
+
+	return TMap<FString, FSpatialStructure>();
 }
 
 

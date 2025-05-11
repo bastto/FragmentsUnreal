@@ -104,6 +104,46 @@ struct FTriangulationResult
 };
 
 USTRUCT(BlueprintType)
+struct FSpatialStructure
+{
+	GENERATED_BODY()
+
+public:
+
+	UPROPERTY()
+	int32 LocalId = -1;
+
+	UPROPERTY()
+	FString Category;
+
+	UPROPERTY()
+	int32 ParentLocalId;
+
+	FSpatialStructure() {}
+
+	FSpatialStructure(int32 InLocalId, const FString& InCategory)
+		: LocalId(InLocalId), Category(InCategory)
+	{
+	}
+};
+
+USTRUCT(BlueprintType)
+struct FFragmentSample
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	int32 SampleIndex = -1;
+	UPROPERTY()
+	int32 LocalTransformIndex = -1;
+	UPROPERTY()
+	int32 RepresentationIndex = -1;
+	UPROPERTY()
+	int32 MaterialIndex = -1;
+};
+
+
+USTRUCT(BlueprintType)
 struct FItemAttribute
 {
 	GENERATED_BODY()
@@ -115,10 +155,10 @@ struct FItemAttribute
 	FString Value;
 
 	UPROPERTY(BlueprintReadOnly)
-	int32 TypeHash;
+	int64 TypeHash;
 
 	FItemAttribute() : Key(TEXT("")), Value(TEXT("")), TypeHash(0) {}
-	FItemAttribute(const FString& InKey, const FString& InValue, int32 InTypeHash)
+	FItemAttribute(const FString& InKey, const FString& InValue, int64 InTypeHash)
 		:Key(InKey), Value(InValue), TypeHash(InTypeHash) {}
 };
 
@@ -130,7 +170,7 @@ UCLASS()
 class FRAGMENTSUNREAL_API UFragmentsUtils : public UBlueprintFunctionLibrary
 {
 	GENERATED_BODY()
-	
+
 public:
 
 	//UFUNCTION(BlueprintCallable, Category = "Fragments")
@@ -138,9 +178,15 @@ public:
 	static FPlaneProjection BuildProjectionPlane(const TArray<FVector>& Points, const TArray<int32>& Profile);
 	static bool IsClockwise(const TArray<FVector2D>& Points);
 	static TArray<FItemAttribute> ParseItemAttribute(const Attribute* Attr);
-	static void PrintSpatialStructure(const SpatialStructure* spatial_struct, int32 ParentIndex = 0);
-
+	static FSpatialStructure MapSpatialStructure(const SpatialStructure* spatial_struct);
+	static class AFragment* MapModelStructure(const SpatialStructure* InS, AFragment*& ParentActor, TMap<int32, AFragment*>& FragmentLookupMapRef);
+	static FString GetIfcCategory(const int64 InTypeHash);
 	static float SafeComponent(float Value);
 	static FVector SafeVector(const FVector& Vec);
 	static FRotator SafeRotator(const FRotator& Rot);
+
+private:
+
+	//void MapSpatialStructureRecursive(const SpatialStructure* Node, int32 ParentId, TArray<FSpatialStructure>& OutList);
+
 };

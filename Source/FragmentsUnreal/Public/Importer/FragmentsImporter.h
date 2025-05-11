@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
 #include "Index/index_generated.h"
+#include "Utils/FragmentsUtils.h"
 
 #include "FragmentsImporter.generated.h"
 
@@ -22,12 +23,15 @@ public:
 
 	UFragmentsImporter() {}
 
-	void Process(AActor* OwnerA, const FString& FragPath);
+	FString Process(AActor* OwnerA, const FString& FragPath, TArray<AFragment*>& OutFragments);
+	//void SpawnFragmentTreeWithMeshes(const SpatialStructure* Node, AActor* Parent, const TMap<int32, FFragmentMeshData>& MeshMap, const Meshes* MeshAssets);
 	void SetOwnerRef(AActor* NewOwnerRef) { OwnerRef = NewOwnerRef; }
+	TMap<FString, FSpatialStructure> GetSpatialStructures() { return SpatialStructureData; }
 
 private:
 
 	void SpawnStaticMesh(UStaticMesh* StaticMesh, const Transform* LocalTransform, const Transform* GlobalTransform, AActor* Owner, FName OptionalTag = FName());
+	void SpawnFragmentModel(AFragment* InFragmentModel, AActor* InParent, const Meshes* MeshesRef);
 	UStaticMesh* CreateStaticMeshFromShell(
 		const Shell* ShellRef,
 		const Material* RefMaterial,
@@ -67,6 +71,9 @@ private:
 	
 	UPROPERTY()
 	UMaterialInterface* BaseGlassMaterial = nullptr;
+
+	UPROPERTY()
+	TMap<FString, FSpatialStructure> SpatialStructureData;
 
 	const Model* ModelRef = nullptr;
 
