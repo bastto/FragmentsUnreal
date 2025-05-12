@@ -12,7 +12,8 @@ public class FragmentsUnreal : ModuleRules
 		PublicIncludePaths.AddRange(
 			new string[] {
 				Path.Combine(ModuleDirectory, "../../ThirdParty/FlatBuffers/include"),
-                Path.Combine(ModuleDirectory, "../../ThirdParty/libtess2/Include")
+                Path.Combine(ModuleDirectory, "../../ThirdParty/libtess2/Include"),
+                Path.Combine(EngineDirectory, "Source/ThirdParty/zlib")
             }
 			);
 				
@@ -59,13 +60,20 @@ public class FragmentsUnreal : ModuleRules
 			}
 			);
 
-        PublicIncludePaths.Add(Path.Combine(EngineDirectory, "Source/ThirdParty/zlib"));
+		// Zlib (Unreal dependency)
         AddEngineThirdPartyPrivateStaticDependencies(Target, "zlib");
 
-        string TessIncludePath = Path.Combine(ModuleDirectory, "../../ThirdParty/libtess2/Include");
-        string TessLibPath = Path.Combine(ModuleDirectory, "../../ThirdParty/libtess2/Lib/Win64");
-
-        //PublicIncludePaths.Add(TessIncludePath);
-        PublicAdditionalLibraries.Add(Path.Combine(TessLibPath, "tess2.lib"));
+		// Platform-specific libtess2 static libs
+        string TessLibPath_Win64 = Path.Combine(ModuleDirectory, "../../ThirdParty/libtess2/Lib/Win64");
+        string TessLibPath_Android = Path.Combine(ModuleDirectory, "../../ThirdParty/libtess2/Lib/Android/ARM64");
+		
+		if (Target.Platform == UnrealTargetPlatform.Win64)
+		{
+			PublicAdditionalLibraries.Add(Path.Combine(TessLibPath_Win64, "tess2.lib"));
+		}
+		else if (Target.Platform == UnrealTargetPlatform.Android)
+		{
+			PublicAdditionalLibraries.Add(Path.Combine(TessLibPath_Android, "tess2.a"));
+		}
     }
 }
