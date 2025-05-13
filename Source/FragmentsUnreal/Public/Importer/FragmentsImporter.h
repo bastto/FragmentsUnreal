@@ -24,12 +24,15 @@ public:
 	UFragmentsImporter() {}
 
 	FString Process(AActor* OwnerA, const FString& FragPath, TArray<AFragment*>& OutFragments);
-	//void SpawnFragmentTreeWithMeshes(const SpatialStructure* Node, AActor* Parent, const TMap<int32, FFragmentMeshData>& MeshMap, const Meshes* MeshAssets);
 	void SetOwnerRef(AActor* NewOwnerRef) { OwnerRef = NewOwnerRef; }
-	TMap<FString, FSpatialStructure> GetSpatialStructures() { return SpatialStructureData; }
+	//TMap<FString, FSpatialStructure> GetSpatialStructures() { return SpatialStructureData; }
+	void GetItemData(AFragment*& InFragment);
+	TArray<FItemAttribute> GetItemPropertySets(AFragment* InFragment);
+	AFragment* GetItemByLocalId(int32 LocalId, const FString& ModelGuid);
 
 private:
 
+	void CollectPropertiesRecursive(const Model* InModel, int32 StartLocalId, TSet<int32>& Visited, TArray<FItemAttribute>& OutAttributes);
 	void SpawnStaticMesh(UStaticMesh* StaticMesh, const Transform* LocalTransform, const Transform* GlobalTransform, AActor* Owner, FName OptionalTag = FName());
 	void SpawnFragmentModel(AFragment* InFragmentModel, AActor* InParent, const Meshes* MeshesRef);
 	UStaticMesh* CreateStaticMeshFromShell(
@@ -72,10 +75,13 @@ private:
 	UPROPERTY()
 	UMaterialInterface* BaseGlassMaterial = nullptr;
 
+	/*UPROPERTY()
+	TMap<FString, FSpatialStructure> SpatialStructureData;*/
 	UPROPERTY()
-	TMap<FString, FSpatialStructure> SpatialStructureData;
-
-	const Model* ModelRef = nullptr;
+	TMap<FString, class UFragmentModelWrapper*> FragmentModels;
+	
+	UPROPERTY()
+	TMap<FString, FFragmentLookup> ModelFragmentsMap;
 
 public:
 

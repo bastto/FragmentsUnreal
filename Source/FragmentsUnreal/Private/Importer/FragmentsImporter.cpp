@@ -17,6 +17,7 @@
 #include "tesselator.h"
 #include "Algo/Reverse.h"
 #include "Fragment/Fragment.h"
+#include "Importer/FragmentModelWrapper.h"
 
 DEFINE_LOG_CATEGORY(LogFragments);
 
@@ -99,7 +100,9 @@ FString UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath, TAr
 		UE_LOG(LogFragments, Log, TEXT("Data appears uncompressed, using raw data"));
 	}
 
-	ModelRef = GetModel(Decompressed.GetData());
+	UFragmentModelWrapper* Wrapper = NewObject<UFragmentModelWrapper>(this);
+	Wrapper->LoadModel(Decompressed);
+	const Model* ModelRef = Wrapper->GetParsedModel();
 	//PrintModelStructure(ModelRef);
 
 	if (!ModelRef)
@@ -111,15 +114,15 @@ FString UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath, TAr
 	BaseGlassMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/FragmentsUnreal/Materials/M_BaseFragmentGlassMaterial.M_BaseFragmentGlassMaterial"));
 	BaseMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/FragmentsUnreal/Materials/M_BaseFragmentMaterial.M_BaseFragmentMaterial"));
 
-	const auto* geometries = ModelRef->geometries();
-	const auto* attributes = ModelRef->attributes();
-	
-	const auto* aligments = ModelRef->alignments();
-	const auto* categories = ModelRef->categories();
 	const auto* guid = ModelRef->guid();
 	const char* RawModelGuid = guid->c_str();
 	FString ModelGuidStr = UTF8_TO_TCHAR(RawModelGuid);
+	FragmentModels.Add(ModelGuidStr, Wrapper);
 
+	const auto* geometries = ModelRef->geometries();
+	const auto* attributes = ModelRef->attributes();
+	const auto* aligments = ModelRef->alignments();
+	const auto* categories = ModelRef->categories();
 	const auto* guids = ModelRef->guids();
 	const auto* guids_items = ModelRef->guids_items();
 	const auto* local_ids = ModelRef->local_ids();
@@ -129,111 +132,6 @@ FString UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath, TAr
 	const auto* spatial_structure = ModelRef->spatial_structure();
 	const auto* _meshes = ModelRef->meshes();
 
-	// DEBUG AREA
-
-	// aligments
-	if (aligments)
-	{
-		for (flatbuffers::uoffset_t i = 0; i < aligments->size(); i++)
-		{
-			const auto* aligment = aligments->Get(i);
-			UE_LOG(LogFragments, Log, TEXT("Aligment %d: %d"), i, aligment->absolute());
-		}
-	}
-
-	// attributes
-	for (flatbuffers::uoffset_t i = 0; i < attributes->size(); i++)
-	{
-		const auto* a = attributes->Get(i);
-		TArray<FItemAttribute> ItemAttributes = UFragmentsUtils::ParseItemAttribute(a);
-		UE_LOG(LogFragments, Log, TEXT("Attribute: %d"), i);
-		for (const FItemAttribute& A : ItemAttributes)
-		{
-			UE_LOG(LogFragments, Log, TEXT("\t%s: %s"), *A.Key, *A.Value);
-			UE_LOG(LogFragments, Log, TEXT("\tIfc Category: %s"), *UFragmentsUtils::GetIfcCategory(A.TypeHash));
-		}
-	}
-
-	// Realations
-
-	//		Relation: 0
-	//		LogFragments : Relation 0 : ["OwnerHistory", 41]
-	//		LogFragments : Relation 1 : ["RepresentationContexts", 111]
-	//		LogFragments : Relation 2 : ["UnitsInContext", 106]
-	//		LogFragments : Relation 3 : ["IsDecomposedBy", 148]
-	//		LogFragments : Relation : 1
-	//		LogFragments : Relation 0 : ["OwnerHistory", 41]
-	//		LogFragments : Relation 1 : ["BuildingAddress", 125]
-	//		LogFragments : Relation 2 : ["Decomposes", 148]
-	//		LogFragments : Relation 3 : ["IsDecomposedBy", 138, 144]
-	//		LogFragments : Relation 4 : ["IsDefinedBy", 24544]
-
-	TMap<int32, TArray<int32>> LocalToAttributeIds;
-	for (flatbuffers::uoffset_t i = 0; i < relations->size(); i++)
-	{
-		UE_LOG(LogFragments, Log, TEXT("Relation: %d"), i);
-		const auto* relation = relations->Get(i);
-
-		for (flatbuffers::uoffset_t j = 0; j < relation->data()->size(); j++)
-		{
-			if (relation && relation->data() && relation->data()->Get(j)) {
-				const char* RawStr = relation->data()->Get(j)->c_str();
-				FString Cleaned = UTF8_TO_TCHAR(RawStr);
-				UE_LOG(LogFragments, Log, TEXT("\tData %d: %s"), j, *Cleaned);
-
-				TArray<FString> Tokens;
-				Cleaned.Replace(TEXT("["), TEXT(""))
-					.Replace(TEXT("]"), TEXT(""))
-					.ParseIntoArray(Tokens, TEXT(","), true);
-
-				if (Tokens.Num() >= 2)
-				{
-					FString Name = Tokens[0].TrimStartAndEnd().Replace(TEXT("\""), TEXT(""));
-					int32 AttributeId = FCString::Atoi(*Tokens[1].TrimStartAndEnd());
-
-					if (Name.Equals(TEXT("IsDefinedBy")))
-					{
-
-					}
-
-					//LocalIdToAttributes.FindOrAdd(LocalId).Add(Key, Value);
-				}
-			}
-		}
-	}
-
-	// relations items
-
-	//		LogFragments: relation_item 0 : 119
-	//		LogFragments : relation_item 1 : 129 -> (this is the local_id)
-	//		LogFragments : relation_item 2 : 138
-	//		LogFragments : relation_item 3 : 144
-	//		LogFragments : relation_item 4 : 148
-	//		LogFragments : relation_item 5 : 186
-	//		LogFragments : relation_item 6 : 222
-	//		LogFragments : relation_item 7 : 224
-	//		LogFragments : relation_item 8 : 225
-	//		LogFragments : relation_item 9 : 226
-	//		LogFragments : relation_item 10 : 231
-	//		LogFragments : relation_item 11 : 232
-	//		LogFragments : relation_item 12 : 235
-	//		LogFragments : relation_item 13 : 241
-	//		LogFragments : relation_item 14 : 244
-	//		LogFragments : relation_item 15 : 250
-	//		LogFragments : relation_item 16 : 253
-	//		LogFragments : relation_item 17 : 257
-	//		LogFragments : relation_item 18 : 294
-	//		LogFragments : relation_item 19 : 297
-	//		LogFragments : relation_item 20 : 298
-	//		LogFragments : relation_item 21 : 301
-	//		LogFragments : relation_item 22 : 303
-
-	for (flatbuffers::uoffset_t i = 0; i < relations_items->size(); i++)
-	{
-		const auto relations_item = relations_items->Get(i);
-		UE_LOG(LogFragments, Log, TEXT("relation_item %d: %d"), i, relations_item);
-	}
-
 	FTransform RootTransform = FTransform::Identity;
 	AFragment* FragmentModel = OwnerRef->GetWorld()->SpawnActor<AFragment>(
 		AFragment::StaticClass(), RootTransform);
@@ -241,7 +139,11 @@ FString UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath, TAr
 	FragmentModel->SetGuid(ModelGuidStr);
 	FragmentModel->SetModelGuid(ModelGuidStr);
 	FragmentModel->SetGlobalTransform(RootTransform);
-	UFragmentsUtils::MapModelStructure(spatial_structure, FragmentModel, FragmentLookupMap);
+	UFragmentsUtils::MapModelStructure(spatial_structure, FragmentModel, FragmentLookupMap, TEXT(""));
+
+	FFragmentLookup FragLookup;
+	FragLookup.Fragments = FragmentLookupMap;
+	ModelFragmentsMap.Add(ModelGuidStr, FragLookup);
 	
 	// Loop through samples and spawn meshes
 	if (_meshes)
@@ -276,35 +178,12 @@ FString UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath, TAr
 			AFragment* FragActor;
 			FragActor = *FragmentLookupMap.Find(local_id);
 
-			const auto* attribute = attributes->Get(ItemId);
-			const auto* category = categories->Get(ItemId);
-			const auto* item_guid = guids->Get(ItemId);
+			FragActor->SetLocalId(local_id);
+			GetItemData(FragActor);
 
 			const auto* global_transform = global_transforms->Get(mesh);
 			FTransform GlobalTransform = UFragmentsUtils::MakeTransform(global_transform);
-
-			TArray<FItemAttribute> ItemAttributes = UFragmentsUtils::ParseItemAttribute(attribute);
-			
 			FragActor->SetGlobalTransform(GlobalTransform);
-			FragActor->SetAttributes(ItemAttributes);
-
-			// Category
-			const char* RawCategory = category->c_str();
-			FString CategorySty = UTF8_TO_TCHAR(RawCategory);
-			FragActor->SetCategory(CategorySty);
-			//ItemActor->Tags.Add(FName(CategorySty));
-
-			// Guids
-			const char* RawGuid = item_guid->c_str();
-			FString GuidStr = UTF8_TO_TCHAR(RawGuid);
-			FragActor->SetGuid(GuidStr);
-			//ItemActor->Tags.Add(FName(GuidStr));
-
-			// Local_id
-			FragActor->SetLocalId(local_id);
-
-			// Model guid
-			FragActor->SetModelGuid(ModelGuidStr);
 
 			for (int32 i = 0; i < ItemSamples.Num(); i++)
 			{
@@ -332,6 +211,179 @@ FString UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath, TAr
 	return ModelGuidStr;
 }
 
+void UFragmentsImporter::GetItemData(AFragment*& InFragment)
+{
+	if (!InFragment || InFragment->GetModelGuid().IsEmpty()) return;
+
+	if (FragmentModels.Contains(InFragment->GetModelGuid()))
+	{
+		UFragmentModelWrapper* Wrapper = *FragmentModels.Find(InFragment->GetModelGuid());
+		const Model* InModel = Wrapper->GetParsedModel();
+		
+		int32 ItemIndex = UFragmentsUtils::GetIndexForLocalId(InModel, InFragment->GetLocalId());
+		if (ItemIndex == INDEX_NONE) return;
+	
+		// Attributes
+		const auto* attribute = InModel->attributes()->Get(ItemIndex);
+		TArray<FItemAttribute> ItemAttributes = UFragmentsUtils::ParseItemAttribute(attribute);
+		InFragment->SetAttributes(ItemAttributes);
+
+		// Category
+		const auto* category = InModel->categories()->Get(ItemIndex);
+		const char* RawCategory = category->c_str();
+		FString CategorySty = UTF8_TO_TCHAR(RawCategory);
+		InFragment->SetCategory(CategorySty);
+		//ItemActor->Tags.Add(FName(CategorySty));
+
+		// Guids
+		const auto* item_guid = InModel->guids()->Get(ItemIndex);
+		const char* RawGuid = item_guid->c_str();
+		FString GuidStr = UTF8_TO_TCHAR(RawGuid);
+		InFragment->SetGuid(GuidStr);
+	}
+}
+
+TArray<FItemAttribute> UFragmentsImporter::GetItemPropertySets(AFragment* InFragment)
+{
+	TArray<FItemAttribute> CollectedAttributes;
+	if (!InFragment || InFragment->GetModelGuid().IsEmpty()) return CollectedAttributes;
+	if (!FragmentModels.Contains(InFragment->GetModelGuid())) return CollectedAttributes;
+
+	UFragmentModelWrapper* Wrapper = *FragmentModels.Find(InFragment->GetModelGuid());
+	const Model* InModel = Wrapper->GetParsedModel();
+	if (!InModel) return CollectedAttributes;
+
+	TSet<int32> Visited;
+	CollectPropertiesRecursive(InModel, InFragment->GetLocalId(), Visited, CollectedAttributes);
+
+	return CollectedAttributes;
+}
+
+
+AFragment* UFragmentsImporter::GetItemByLocalId(int32 LocalId, const FString& ModelGuid)
+{
+	if (ModelFragmentsMap.Contains(ModelGuid))
+	{
+		FFragmentLookup Lookup = *ModelFragmentsMap.Find(ModelGuid);
+
+		if (Lookup.Fragments.Contains(LocalId))
+		{
+			return *Lookup.Fragments.Find(LocalId);
+		}
+	}
+	return nullptr;
+}
+
+void UFragmentsImporter::CollectPropertiesRecursive(
+	const Model* InModel,
+	int32 StartLocalId,
+	TSet<int32>& Visited,
+	TArray<FItemAttribute>& OutAttributes)
+{
+	if (!InModel || Visited.Contains(StartLocalId)) return;
+	Visited.Add(StartLocalId);
+
+	const auto* relations = InModel->relations();
+	const auto* attributes = InModel->attributes();
+	const auto* relations_items = InModel->relations_items();
+
+	for (flatbuffers::uoffset_t i = 0; i < relations_items->size(); i++)
+	{
+		if (relations_items->Get(i) != StartLocalId) continue;
+
+		const auto* Relation = relations->Get(i);
+		if (!Relation || !Relation->data()) continue;
+
+		for (flatbuffers::uoffset_t j = 0; j < Relation->data()->size(); j++)
+		{
+			const char* RawStr = Relation->data()->Get(j)->c_str();
+			FString Cleaned = UTF8_TO_TCHAR(RawStr);
+
+			TArray<FString> Tokens;
+			Cleaned.Replace(TEXT("["), TEXT(""))
+				.Replace(TEXT("]"), TEXT(""))
+				.ParseIntoArray(Tokens, TEXT(","), true);
+
+			if (Tokens.Num() < 2) continue;
+
+			FString RelationName = Tokens[0].TrimStartAndEnd().Replace(TEXT("\""), TEXT(""));
+
+			// Only allow property-related relations
+			if (!(RelationName.Equals(TEXT("IsDefinedBy")) || RelationName.Equals(TEXT("HasProperties")) || RelationName.Equals(TEXT("DefinesType"))))
+				continue;
+
+			for (int32 k = 1; k < Tokens.Num(); ++k)
+			{
+				int32 RelatedLocalId = FCString::Atoi(*Tokens[k].TrimStartAndEnd());
+				if (Visited.Contains(RelatedLocalId)) continue;
+
+				// Try resolving RelatedLocalId to attribute
+				flatbuffers::uoffset_t AttrIndex = UFragmentsUtils::GetIndexForLocalId(InModel, RelatedLocalId);
+				if (AttrIndex != INDEX_NONE && attributes && AttrIndex < attributes->size())
+				{
+					const auto* Attr = attributes->Get(AttrIndex);
+					if (Attr)
+					{
+						TArray<FItemAttribute> Props = UFragmentsUtils::ParseItemAttribute(Attr);
+						OutAttributes.Append(Props);
+					}
+				}
+
+				// Recurse
+				CollectPropertiesRecursive(InModel, RelatedLocalId, Visited, OutAttributes);
+			}
+		}
+	}
+
+	// Iterate all relations to find ones associated with StartLocalId
+	//for (flatbuffers::uoffset_t i = 0; i < relations_items->size(); i++)
+	//{
+	//	if (relations_items->Get(i) != StartLocalId) continue;
+
+	//	const auto* Relation = relations->Get(i);
+	//	if (!Relation || !Relation->data()) continue;
+
+	//	for (flatbuffers::uoffset_t j = 0; j < Relation->data()->size(); j++)
+	//	{
+	//		const char* RawStr = Relation->data()->Get(j)->c_str();
+	//		FString Cleaned = UTF8_TO_TCHAR(RawStr);
+
+	//		TArray<FString> Tokens;
+	//		Cleaned.Replace(TEXT("["), TEXT(""))
+	//			.Replace(TEXT("]"), TEXT(""))
+	//			.ParseIntoArray(Tokens, TEXT(","), true);
+
+	//		if (Tokens.Num() < 2) continue;
+
+	//		FString RelationName = Tokens[0].TrimStartAndEnd().Replace(TEXT("\""), TEXT(""));
+
+	//		for (int32 k = 1; k < Tokens.Num(); ++k)
+	//		{
+	//			int32 RelatedLocalId = FCString::Atoi(*Tokens[k].TrimStartAndEnd());
+
+	//			if (RelationName.Equals(TEXT("HasProperties")))
+	//			{
+	//				// Use GetIndexForLocalId to resolve RelatedLocalId to attribute index
+	//				int32 AttrIndex = UFragmentsUtils::GetIndexForLocalId(InModel, RelatedLocalId);
+	//				if (AttrIndex != INDEX_NONE)
+	//				{
+	//					const auto* Attr = attributes->Get(AttrIndex);
+	//					if (Attr)
+	//					{
+	//						TArray<FItemAttribute> Props = UFragmentsUtils::ParseItemAttribute(Attr);
+	//						OutAttributes.Append(Props);
+	//					}
+	//				}
+	//			}
+	//			else if (RelationName.Equals(TEXT("IsDefinedBy")))
+	//			{
+	//				// Recurse deeper
+	//				CollectPropertiesRecursive(InModel, RelatedLocalId, Visited, OutAttributes);
+	//			}
+	//		}
+	//	}
+	//}
+}
 //void UFragmentsImporter::SpawnFragmentTreeWithMeshes(
 //	const SpatialStructure* Node,
 //	AActor* Parent,
@@ -489,7 +541,8 @@ void UFragmentsImporter::SpawnFragmentModel(AFragment* InFragmentModel, AActor* 
 	InFragmentModel->AttachToActor(InParent, FAttachmentTransformRules::KeepWorldTransform);
 
 #if WITH_EDITOR
-	InFragmentModel->SetActorLabel(InFragmentModel->GetCategory());
+	if (!InFragmentModel->GetCategory().IsEmpty())
+		InFragmentModel->SetActorLabel(InFragmentModel->GetCategory());
 #endif
 
 	// 3. Create Meshes If Sample Exists

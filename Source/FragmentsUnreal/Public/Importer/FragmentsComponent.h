@@ -33,9 +33,11 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Fragments|Importer")
 	TArray<class AFragment*> GetFragmentActors();
+		
+	UFUNCTION(BlueprintCallable, Category = "Fragments|Importer")
+	TArray<FItemAttribute> GetItemPropertySets(AFragment* InFragment);
 
 	UFUNCTION(BlueprintCallable, Category = "Fragments|Importer")
-	TMap<FString, FSpatialStructure> GetSpatialStructures();
-		
+	AFragment* GetItemByLocalId(int32 LocalId, const FString& ModelGuid);
 	
 };

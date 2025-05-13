@@ -124,64 +124,52 @@ TArray<FItemAttribute> UFragmentsUtils::ParseItemAttribute(const Attribute* Attr
 	return Parsed;
 }
 
-FSpatialStructure UFragmentsUtils::MapSpatialStructure(const SpatialStructure* spatial_struct)
+AFragment* UFragmentsUtils::MapModelStructure(const SpatialStructure* InS, AFragment*& ParentActor, TMap<int32, AFragment*>& FragmentLookupMapRef, const FString& InheritedCategory)
 {
+	// Determine if this node should spawn an actor
+	const bool bHasLocalId = InS->local_id().has_value();
+	const bool bHasCategory = InS->category() && InS->category()->size() > 0;
+	const FString ThisCategory = bHasCategory ? UTF8_TO_TCHAR(InS->category()->c_str()) : InheritedCategory;
 
-	FSpatialStructure ss;
+	const bool bEffectiveCategory = bHasCategory || !InheritedCategory.IsEmpty();
+	const bool bShouldSpawn = bHasLocalId && bEffectiveCategory;
 
-	if (spatial_struct->local_id().has_value())
+	AFragment* FragmentActor = nullptr;
+
+	if (bShouldSpawn)
 	{
-		ss.LocalId = spatial_struct->local_id().value();
-		//UE_LOG(LogTemp, Log, TEXT("\tlocal_id: %d"), spatial_struct->local_id());
-	}
+		FragmentActor = ParentActor->GetWorld()->SpawnActor<AFragment>(AFragment::StaticClass(), FTransform::Identity);
 
-	if (spatial_struct->category())
-	{
-		if (spatial_struct->category()->size() > 0)
+		if (bHasLocalId)
 		{
-			ss.Category = UTF8_TO_TCHAR(spatial_struct->category()->c_str());
-			//UE_LOG(LogTemp, Log, TEXT("\tcategory: %s"), UTF8_TO_TCHAR(spatial_struct->category()->c_str()));
+			int32 LocalId = InS->local_id().value();
+			FragmentActor->SetLocalId(LocalId);
+			FragmentLookupMapRef.Add(LocalId, FragmentActor);
 		}
-	}
 
-	if (spatial_struct->children()->size() > 0)
-	{
-		for (flatbuffers::uoffset_t i = 0; i < spatial_struct->children()->size(); i++)
+		FragmentActor->SetCategory(ThisCategory);
+		FragmentActor->SetModelGuid(ParentActor->GetModelGuid());
+
+#if WITH_EDITOR
 		{
-			MapSpatialStructure(spatial_struct->children()->Get(i));
+			FragmentActor->SetActorLabel(ThisCategory);
 		}
+#endif
+
+		ParentActor->AddChild(FragmentActor);
 	}
 
-	return ss;
-}
+	const FString NextInheritedCategory = (!FragmentActor && bHasCategory) ? ThisCategory : TEXT("");
 
-AFragment* UFragmentsUtils::MapModelStructure(const SpatialStructure* InS, AFragment*& ParentActor, TMap<int32, AFragment*>& FragmentLookupMapRef)
-{
-	AFragment* FragmentActor = ParentActor->GetWorld()->SpawnActor<AFragment>(
-		AFragment::StaticClass(), FTransform::Identity);
-	if (InS->local_id().has_value())
-	{
-		FragmentActor->SetLocalId(InS->local_id().value());
-		FragmentLookupMapRef.Add(FragmentActor->GetLocalId(), FragmentActor);
-	}
-	if (InS->category())
-	{
-		if (InS->category()->size() > 0)
-		{
-			FragmentActor->SetCategory(UTF8_TO_TCHAR(InS->category()->c_str()));
-
-		}
-	}
-	if (InS->children()->size() > 0)
+	if (InS->children())
 	{
 		for (flatbuffers::uoffset_t i = 0; i < InS->children()->size(); i++)
 		{
-			MapModelStructure(InS->children()->Get(i), FragmentActor, FragmentLookupMapRef);
+			MapModelStructure(InS->children()->Get(i), FragmentActor ? FragmentActor : ParentActor, FragmentLookupMapRef, NextInheritedCategory);
 		}
 	}
-	ParentActor->AddChild(FragmentActor);
 
-	return nullptr;
+	return FragmentActor;
 }
 
 FString UFragmentsUtils::GetIfcCategory(const int64 InTypeHash)
@@ -284,4 +272,19 @@ FRotator UFragmentsUtils::SafeRotator(const FRotator& Rot)
 		SafeComponent(Rot.Yaw),
 		SafeComponent(Rot.Roll)
 	);
+}
+
+int32 UFragmentsUtils::GetIndexForLocalId(const Model* InModelRef, int32 LocalId)
+{
+	if (!InModelRef || !InModelRef->local_ids()) return INDEX_NONE;
+
+	const auto* LocalIds = InModelRef->local_ids();
+	for (flatbuffers::uoffset_t i = 0; i < LocalIds->size(); i++)
+	{
+		if (LocalIds->Get(i) == LocalId)
+		{
+			return i;
+		}
+	}
+	return INDEX_NONE;
 }

@@ -51,12 +51,17 @@ TArray<class AFragment*> UFragmentsComponent::GetFragmentActors()
 	return TArray<class AFragment*>();
 }
 
-TMap<FString, FSpatialStructure> UFragmentsComponent::GetSpatialStructures()
+TArray<FItemAttribute> UFragmentsComponent::GetItemPropertySets(AFragment* InFragment)
 {
 	if (FragmentsImporter)
-		return FragmentsImporter->GetSpatialStructures();
+		return FragmentsImporter->GetItemPropertySets(InFragment);
+	return TArray<FItemAttribute>();
+}
 
-	return TMap<FString, FSpatialStructure>();
+AFragment* UFragmentsComponent::GetItemByLocalId(int32 LocalId, const FString& ModelGuid)
+{
+	if (FragmentsImporter) return FragmentsImporter->GetItemByLocalId(LocalId, ModelGuid);
+	return nullptr;
 }
 
 

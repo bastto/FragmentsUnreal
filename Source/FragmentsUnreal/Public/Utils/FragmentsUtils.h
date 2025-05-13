@@ -104,27 +104,14 @@ struct FTriangulationResult
 };
 
 USTRUCT(BlueprintType)
-struct FSpatialStructure
+struct FFragmentLookup
 {
 	GENERATED_BODY()
 
 public:
 
 	UPROPERTY()
-	int32 LocalId = -1;
-
-	UPROPERTY()
-	FString Category;
-
-	UPROPERTY()
-	int32 ParentLocalId;
-
-	FSpatialStructure() {}
-
-	FSpatialStructure(int32 InLocalId, const FString& InCategory)
-		: LocalId(InLocalId), Category(InCategory)
-	{
-	}
+	TMap<int32, class AFragment*> Fragments;
 };
 
 USTRUCT(BlueprintType)
@@ -178,12 +165,12 @@ public:
 	static FPlaneProjection BuildProjectionPlane(const TArray<FVector>& Points, const TArray<int32>& Profile);
 	static bool IsClockwise(const TArray<FVector2D>& Points);
 	static TArray<FItemAttribute> ParseItemAttribute(const Attribute* Attr);
-	static FSpatialStructure MapSpatialStructure(const SpatialStructure* spatial_struct);
-	static class AFragment* MapModelStructure(const SpatialStructure* InS, AFragment*& ParentActor, TMap<int32, AFragment*>& FragmentLookupMapRef);
+	static class AFragment* MapModelStructure(const SpatialStructure* InS, AFragment*& ParentActor, TMap<int32, AFragment*>& FragmentLookupMapRef, const FString& InheritedCategory);
 	static FString GetIfcCategory(const int64 InTypeHash);
 	static float SafeComponent(float Value);
 	static FVector SafeVector(const FVector& Vec);
 	static FRotator SafeRotator(const FRotator& Rot);
+	static int32 GetIndexForLocalId(const Model* InModelRef, int32 LocalId);
 
 private:
 
