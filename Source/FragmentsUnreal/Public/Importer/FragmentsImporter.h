@@ -23,7 +23,7 @@ public:
 
 	UFragmentsImporter() {}
 
-	FString Process(AActor* OwnerA, const FString& FragPath, TArray<AFragment*>& OutFragments);
+	FString Process(AActor* OwnerA, const FString& FragPath, TArray<AFragment*>& OutFragments, bool bSaveMeshes = true);
 	void SetOwnerRef(AActor* NewOwnerRef) { OwnerRef = NewOwnerRef; }
 	//TMap<FString, FSpatialStructure> GetSpatialStructures() { return SpatialStructureData; }
 	void GetItemData(AFragment*& InFragment);
@@ -34,18 +34,18 @@ private:
 
 	void CollectPropertiesRecursive(const Model* InModel, int32 StartLocalId, TSet<int32>& Visited, TArray<FItemAttribute>& OutAttributes);
 	void SpawnStaticMesh(UStaticMesh* StaticMesh, const Transform* LocalTransform, const Transform* GlobalTransform, AActor* Owner, FName OptionalTag = FName());
-	void SpawnFragmentModel(AFragment* InFragmentModel, AActor* InParent, const Meshes* MeshesRef);
+	void SpawnFragmentModel(AFragment* InFragmentModel, AActor* InParent, const Meshes* MeshesRef, bool bSaveMeshes);
 	UStaticMesh* CreateStaticMeshFromShell(
 		const Shell* ShellRef,
 		const Material* RefMaterial,
 		const FString& AssetName,
-		const FString& AssetPath
+		UObject* OuterRef
 	);
 	UStaticMesh* CreateStaticMeshFromCircleExtrusion(
 		const CircleExtrusion* CircleExtrusion,
 		const Material* RefMaterial,
 		const FString& AssetName,
-		const FString& AssetPath
+		UObject* OuterRef
 	);
 
 	FName AddMaterialToMesh(UStaticMesh*& CreatedMesh, const Material* RefMaterial);

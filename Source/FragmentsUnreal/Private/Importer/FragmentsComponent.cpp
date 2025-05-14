@@ -35,10 +35,10 @@ void UFragmentsComponent::TickComponent(float DeltaTime, ELevelTick TickType, FA
 	// ...
 }
 
-FString UFragmentsComponent::TestImportFragmentFile(const FString& Path, TArray<AFragment*>& OutFragments)
+FString UFragmentsComponent::TestImportFragmentFile(const FString& Path, TArray<AFragment*>& OutFragments, bool bSaveMeshes)
 {
 	if (FragmentsImporter)
-		return FragmentsImporter->Process(GetOwner(), Path, OutFragments);
+		return FragmentsImporter->Process(GetOwner(), Path, OutFragments, bSaveMeshes);
 
 	return FString();
 }

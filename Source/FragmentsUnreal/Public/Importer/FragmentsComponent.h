@@ -29,7 +29,7 @@ public:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 	UFUNCTION(BlueprintCallable, Category = "Fragments|Importer")
-	FString TestImportFragmentFile(const FString& Path, TArray<AFragment*>& OutFragments);
+	FString TestImportFragmentFile(const FString& Path, TArray<AFragment*>& OutFragments, bool bSaveMeshes);
 
 	UFUNCTION(BlueprintCallable, Category = "Fragments|Importer")
 	TArray<class AFragment*> GetFragmentActors();

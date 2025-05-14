@@ -18,10 +18,11 @@
 #include "Algo/Reverse.h"
 #include "Fragment/Fragment.h"
 #include "Importer/FragmentModelWrapper.h"
+#include "UObject/SavePackage.h"
 
 DEFINE_LOG_CATEGORY(LogFragments);
 
-FString UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath, TArray<AFragment*>& OutFragments)
+FString UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath, TArray<AFragment*>& OutFragments, bool bSaveMeshes)
 {
 	SetOwnerRef(OwnerA);
 	TArray<uint8> CompressedData;
@@ -204,7 +205,7 @@ FString UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath, TAr
 		}
 	}
 
-	SpawnFragmentModel(FragmentModel, OwnerRef, _meshes);
+	SpawnFragmentModel(FragmentModel, OwnerRef, _meshes, bSaveMeshes);
 	OutFragments.Add(FragmentModel);
 
 	//SpatialStructureData.Add(ModelGuidStr, _ss);
@@ -518,6 +519,9 @@ void UFragmentsImporter::SpawnStaticMesh(UStaticMesh* StaticMesh,const Transform
 	MeshActor->MarkComponentsRenderStateDirty();
 	MeshActor->SetActorTransform(Transform); // Apply the final transform
 
+	// Step 6: Save the StaticMesh used
+
+
 	// Ensure mesh is added and visible
 	MeshComponent->SetVisibility(true);
 	MeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
@@ -526,7 +530,7 @@ void UFragmentsImporter::SpawnStaticMesh(UStaticMesh* StaticMesh,const Transform
 	MeshActor->Tags.Add(OptionalTag);
 }
 
-void UFragmentsImporter::SpawnFragmentModel(AFragment* InFragmentModel, AActor* InParent, const Meshes* MeshesRef)
+void UFragmentsImporter::SpawnFragmentModel(AFragment* InFragmentModel, AActor* InParent, const Meshes* MeshesRef, bool bSaveMeshes)
 {
 	if (!InFragmentModel || !InParent || !MeshesRef) return;
 
@@ -549,10 +553,17 @@ void UFragmentsImporter::SpawnFragmentModel(AFragment* InFragmentModel, AActor* 
 	const TArray<FFragmentSample>& Samples = InFragmentModel->GetSamples();
 	if (Samples.Num() > 0)
 	{
-		FString PackagePath = FString::Printf(TEXT("/Game/Buildings/%s"), *InFragmentModel->GetModelGuid());
 		for (int32 i = 0; i < Samples.Num(); i++)
 		{
 			const FFragmentSample& Sample = Samples[i];
+
+			//FString PackagePath = FString::Printf(TEXT("/Game/Buildings/%s"), *InFragmentModel->GetModelGuid());
+			FString MeshName = FString::Printf(TEXT("%d_%d"), InFragmentModel->GetLocalId(), i);
+			FString PackagePath = TEXT("/Game/Buildings") / InFragmentModel->GetModelGuid()/ MeshName;
+			const FString SamplePath = PackagePath + TEXT(".") + MeshName;
+
+			FString UniquePackageName = FPackageName::ObjectPathToPackageName(PackagePath);
+			FString PackageFileName = FPackageName::LongPackageNameToFilename(UniquePackageName, FPackageName::GetAssetPackageExtension());
 
 			const Material* material = MeshesRef->materials()->Get(Sample.MaterialIndex);
 			const Representation* representation = MeshesRef->representations()->Get(Sample.RepresentationIndex);
@@ -561,22 +572,69 @@ void UFragmentsImporter::SpawnFragmentModel(AFragment* InFragmentModel, AActor* 
 			FTransform LocalTransform = UFragmentsUtils::MakeTransform(local_transform);
 
 			UStaticMesh* Mesh = nullptr;
-			FString MeshName = FString::Printf(TEXT("sample_%d_%d"), InFragmentModel->GetLocalId(), i);
-
-			if (representation->representation_class() == RepresentationClass::RepresentationClass_SHELL)
+			//FString MeshName = FString::Printf(TEXT("sample_%d_%d"), InFragmentModel->GetLocalId(), i);
+			bool bIsNewMesh = false;
+			if (FPaths::FileExists(PackageFileName))
 			{
-				const auto* shell = MeshesRef->shells()->Get(representation->id());
-				Mesh = CreateStaticMeshFromShell(shell, material, *MeshName, PackagePath);
-
+				UPackage* ExistingPackage = LoadPackage(nullptr, *PackagePath, LOAD_None);
+				//UStaticMesh* Mesh = Cast<UStaticMesh>(StaticLoadObject(UStaticMesh::StaticClass(), nullptr, *MeshObjectPath));
+				bool bMeshFound = false;
+				if (ExistingPackage)
+				{
+					Mesh = FindObject<UStaticMesh>(ExistingPackage, *MeshName);
+					if (Mesh != nullptr) bMeshFound = true;
+				}
 			}
-			else if (representation->representation_class() == RepresentationClass_CIRCLE_EXTRUSION)
+			else
 			{
-				const auto* circleExtrusion = MeshesRef->circle_extrusions()->Get(representation->id());
-				Mesh = CreateStaticMeshFromCircleExtrusion(circleExtrusion, material, *MeshName, PackagePath);
+				UPackage* MeshPackage = CreatePackage(*PackagePath);
+				if (representation->representation_class() == RepresentationClass::RepresentationClass_SHELL)
+				{
+					const auto* shell = MeshesRef->shells()->Get(representation->id());
+					Mesh = CreateStaticMeshFromShell(shell, material, *MeshName, MeshPackage);
+
+				}
+				else if (representation->representation_class() == RepresentationClass_CIRCLE_EXTRUSION)
+				{
+					const auto* circleExtrusion = MeshesRef->circle_extrusions()->Get(representation->id());
+					Mesh = CreateStaticMeshFromCircleExtrusion(circleExtrusion, material, *MeshName, MeshPackage);
+				}
+
+				bIsNewMesh = (Mesh != nullptr);
+
+				if (bIsNewMesh && Mesh)
+				{
+					if (!FPaths::FileExists(PackageFileName) && bSaveMeshes)
+					{
+						MeshPackage->FullyLoad();
+
+						Mesh->Rename(*MeshName, MeshPackage);
+						Mesh->SetFlags(RF_Public | RF_Standalone);
+						Mesh->Build();
+						MeshPackage->MarkPackageDirty();
+						FAssetRegistryModule::AssetCreated(Mesh);
+						UE_LOG(LogFragments, Warning, TEXT("Mesh Outer after Rename: %s"), *GetNameSafe(Mesh->GetOuter()));
+
+						FSavePackageArgs SaveArgs;
+						SaveArgs.SaveFlags = RF_Public | RF_Standalone;
+
+						UE_LOG(LogFragments, Warning, TEXT("PackageFileName: %s"), *PackageFileName);
+						if (UPackage::SavePackage(MeshPackage, Mesh, *PackageFileName, SaveArgs))
+						{
+							UE_LOG(LogFragments, Log, TEXT("Packaged saved successfully: %s"), *UniquePackageName);
+						}
+						else
+						{
+							UE_LOG(LogFragments, Log, TEXT("Failed to save package: %s"), *UniquePackageName);
+						}
+					}
+				}
 			}
+
 
 			if (Mesh)
 			{
+
 				// Add StaticMeshComponent to parent actor
 				UStaticMeshComponent* MeshComp = NewObject<UStaticMeshComponent>(InFragmentModel);
 				MeshComp->SetStaticMesh(Mesh);
@@ -591,20 +649,38 @@ void UFragmentsImporter::SpawnFragmentModel(AFragment* InFragmentModel, AActor* 
 	// 4. Recursively spawn child fragments
 	for (AFragment* Child : InFragmentModel->GetChildren())
 	{
-		SpawnFragmentModel(Child, InFragmentModel, MeshesRef);
+		SpawnFragmentModel(Child, InFragmentModel, MeshesRef, bSaveMeshes);
 	}
 }
 
-UStaticMesh* UFragmentsImporter::CreateStaticMeshFromShell(const Shell* ShellRef, const Material* RefMaterial, const FString& AssetName, const FString& AssetPath)
+UStaticMesh* UFragmentsImporter::CreateStaticMeshFromShell(const Shell* ShellRef, const Material* RefMaterial, const FString& AssetName, UObject* OuterRef)
 {
 	// Create StaticMesh object
-	UStaticMesh* StaticMesh = NewObject<UStaticMesh>(OwnerRef, FName(*AssetName), RF_Public | RF_Standalone | RF_Transient);
+	UStaticMesh* StaticMesh = NewObject<UStaticMesh>(OuterRef, FName(*AssetName), RF_Public | RF_Standalone /*| RF_Transient*/);
 	StaticMesh->InitResources();
 	StaticMesh->SetLightingGuid();
 
-	UStaticMeshDescription* StaticMeshDescription = StaticMesh->CreateStaticMeshDescription(OwnerRef);
+	UStaticMeshDescription* StaticMeshDescription = StaticMesh->CreateStaticMeshDescription(OuterRef);
 	FMeshDescription& MeshDescription = StaticMeshDescription->GetMeshDescription();
 	UStaticMesh::FBuildMeshDescriptionsParams MeshParams;
+
+	//Build Settings
+#if WITH_EDITOR
+	{
+		FStaticMeshSourceModel& SrcModel = StaticMesh->AddSourceModel();
+		SrcModel.BuildSettings.bRecomputeNormals = true;
+		SrcModel.BuildSettings.bRecomputeTangents = true;
+		SrcModel.BuildSettings.bRemoveDegenerates = true;
+		SrcModel.BuildSettings.bUseHighPrecisionTangentBasis = false;
+		SrcModel.BuildSettings.bBuildReversedIndexBuffer = true;
+		SrcModel.BuildSettings.bUseFullPrecisionUVs = false;
+		SrcModel.BuildSettings.bGenerateLightmapUVs = true;
+		SrcModel.BuildSettings.SrcLightmapIndex = 0;
+		SrcModel.BuildSettings.DstLightmapIndex = 1;
+		SrcModel.BuildSettings.MinLightmapResolution = 64;
+	}
+#endif
+
 	MeshParams.bBuildSimpleCollision = true;
 	MeshParams.bCommitMeshDescription = true;
 	MeshParams.bMarkPackageDirty = true;
@@ -752,24 +828,40 @@ UStaticMesh* UFragmentsImporter::CreateStaticMeshFromShell(const Shell* ShellRef
 	FStaticMeshOperations::ComputeTangentsAndNormals(MeshDescription, EComputeNTBsFlags::Normals | EComputeNTBsFlags::Tangents);
 
 	StaticMesh->BuildFromMeshDescriptions(TArray<const FMeshDescription*>{&MeshDescription}, MeshParams);
-	FAssetRegistryModule::AssetCreated(StaticMesh);
 
 	return StaticMesh;
 }
 
-UStaticMesh* UFragmentsImporter::CreateStaticMeshFromCircleExtrusion(const CircleExtrusion* CircleExtrusion, const Material* RefMaterial, const FString& AssetName, const FString& AssetPath)
+UStaticMesh* UFragmentsImporter::CreateStaticMeshFromCircleExtrusion(const CircleExtrusion* CircleExtrusion, const Material* RefMaterial, const FString& AssetName, UObject* OuterRef)
 {
 	if (!CircleExtrusion || !CircleExtrusion->axes() || CircleExtrusion->axes()->size() == 0)
 		return nullptr;
 
-	UStaticMesh* StaticMesh = NewObject<UStaticMesh>(OwnerRef, FName(*AssetName), RF_Public | RF_Standalone | RF_Transient);
+	UStaticMesh* StaticMesh = NewObject<UStaticMesh>(OuterRef, FName(*AssetName), RF_Public | RF_Standalone | RF_Transient);
 	StaticMesh->InitResources();
 	StaticMesh->SetLightingGuid();
 
 	TArray<const FMeshDescription*> MeshDescriptionPtrs;
 
+	//Build Settings
+#if WITH_EDITOR
+	{
+		FStaticMeshSourceModel& SrcModel = StaticMesh->AddSourceModel();
+		SrcModel.BuildSettings.bRecomputeNormals = true;
+		SrcModel.BuildSettings.bRecomputeTangents = true;
+		SrcModel.BuildSettings.bRemoveDegenerates = true;
+		SrcModel.BuildSettings.bUseHighPrecisionTangentBasis = false;
+		SrcModel.BuildSettings.bBuildReversedIndexBuffer = true;
+		SrcModel.BuildSettings.bUseFullPrecisionUVs = false;
+		SrcModel.BuildSettings.bGenerateLightmapUVs = false;
+		SrcModel.BuildSettings.SrcLightmapIndex = 0;
+		SrcModel.BuildSettings.DstLightmapIndex = 1;
+		SrcModel.BuildSettings.MinLightmapResolution = 64;
+	}
+#endif
+
 	// LOD0 – Full circle extrusion
-	UStaticMeshDescription* LOD0Desc = StaticMesh->CreateStaticMeshDescription(OwnerRef);
+	UStaticMeshDescription* LOD0Desc = StaticMesh->CreateStaticMeshDescription(OuterRef);
 	BuildFullCircleExtrusion(*LOD0Desc, CircleExtrusion, RefMaterial, StaticMesh);
 	MeshDescriptionPtrs.Add(&LOD0Desc->GetMeshDescription());
 
@@ -805,10 +897,8 @@ UStaticMesh* UFragmentsImporter::CreateStaticMeshFromCircleExtrusion(const Circl
 	//{
 	//	UE_LOG(LogTemp, Warning, TEXT("Unexpected: Only %d LODs were created!"), StaticMesh->GetNumSourceModels());
 	//}
-	FAssetRegistryModule::AssetCreated(StaticMesh);
 	return StaticMesh;
 }
-
 
 FName UFragmentsImporter::AddMaterialToMesh(UStaticMesh*& CreatedMesh, const Material* RefMaterial)
 {
