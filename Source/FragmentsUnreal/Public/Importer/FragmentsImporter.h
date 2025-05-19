@@ -6,6 +6,7 @@
 #include "UObject/NoExportTypes.h"
 #include "Index/index_generated.h"
 #include "Utils/FragmentsUtils.h"
+#include "Importer/DeferredPackageSaveManager.h"
 
 #include "FragmentsImporter.generated.h"
 
@@ -21,7 +22,7 @@ class FRAGMENTSUNREAL_API UFragmentsImporter :public UObject
 
 public:
 
-	UFragmentsImporter() {}
+	UFragmentsImporter();
 
 	FString Process(AActor* OwnerA, const FString& FragPath, TArray<AFragment*>& OutFragments, bool bSaveMeshes = true);
 	void SetOwnerRef(AActor* NewOwnerRef) { OwnerRef = NewOwnerRef; }
@@ -62,6 +63,8 @@ private:
 
 	TArray<FVector> SampleRingPoints(const FVector& Center, const FVector XDir, const FVector& YDir, float Radius, int SegmentCount, float ApertureRadians);
 
+	void SavePackagesWithProgress(const TArray<UPackage*>& InPackagesToSave);
+
 	// variables
 
 private:
@@ -82,6 +85,14 @@ private:
 	
 	UPROPERTY()
 	TMap<FString, FFragmentLookup> ModelFragmentsMap;
+
+	UPROPERTY()
+	TMap<FString, UStaticMesh*> MeshCache;
+
+	UPROPERTY()
+	TArray<UPackage*> PackagesToSave;
+
+	FDeferredPackageSaveManager DeferredSaveManager;
 
 public:
 

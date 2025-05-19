@@ -30,6 +30,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Fragments|Importer")
 	FString TestImportFragmentFile(const FString& Path, TArray<AFragment*>& OutFragments, bool bSaveMeshes);
+	
+	UFUNCTION(BlueprintCallable, Category = "Fragments|Importer")
+	FString ProcessFragment(const FString& Path, TArray<AFragment*>& OutFragments, bool bSaveMeshes);
 
 	UFUNCTION(BlueprintCallable, Category = "Fragments|Importer")
 	TArray<class AFragment*> GetFragmentActors();

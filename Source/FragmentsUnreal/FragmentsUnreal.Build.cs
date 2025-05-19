@@ -73,7 +73,7 @@ public class FragmentsUnreal : ModuleRules
 		}
 		else if (Target.Platform == UnrealTargetPlatform.Android)
 		{
-			PublicAdditionalLibraries.Add(Path.Combine(TessLibPath_Android, "tess2.a"));
+			PublicAdditionalLibraries.Add(Path.Combine(TessLibPath_Android, "libtess2.a"));
 		}
     }
 }

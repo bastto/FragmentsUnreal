@@ -19,8 +19,16 @@
 #include "Fragment/Fragment.h"
 #include "Importer/FragmentModelWrapper.h"
 #include "UObject/SavePackage.h"
+#include "Misc/ScopedSlowTask.h"
+
+
 
 DEFINE_LOG_CATEGORY(LogFragments);
+
+UFragmentsImporter::UFragmentsImporter()
+{
+
+}
 
 FString UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath, TArray<AFragment*>& OutFragments, bool bSaveMeshes)
 {
@@ -56,8 +64,6 @@ FString UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath, TAr
 			return FString();
 		}
 
-		UE_LOG(LogFragments, Log, TEXT("Starting decompression..."));
-
 		const int32 ChunkSize = 1024 * 1024;
 		int32 TotalOut = 0;
 
@@ -71,7 +77,7 @@ FString UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath, TAr
 			ret = inflate(&stream, Z_NO_FLUSH);
 
 			// Log out more detailed information for debugging
-			UE_LOG(LogFragments, Log, TEXT("Decompressing chunk %d: avail_in = %d, avail_out = %d, ret = %d"), i, stream.avail_in, stream.avail_out, ret);
+			//UE_LOG(LogFragments, Log, TEXT("Decompressing chunk %d: avail_in = %d, avail_out = %d, ret = %d"), i, stream.avail_in, stream.avail_out, ret);
 
 			if (ret == Z_STREAM_END)
 			{
@@ -93,7 +99,7 @@ FString UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath, TAr
 		}
 
 		Decompressed.SetNum(TotalOut);
-		UE_LOG(LogFragments, Log, TEXT("Decompression complete. Total bytes: %d"), TotalOut);
+		//UE_LOG(LogFragments, Log, TEXT("Decompression complete. Total bytes: %d"), TotalOut);
 	}
 	else
 	{
@@ -205,7 +211,23 @@ FString UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath, TAr
 		}
 	}
 
+	FDateTime StartTime = FDateTime::Now();
 	SpawnFragmentModel(FragmentModel, OwnerRef, _meshes, bSaveMeshes);
+	UE_LOG(LogFragments, Warning, TEXT("Loaded model in [%s]s -> %s"), *(FDateTime::Now() - StartTime).ToString(), *ModelGuidStr);
+	if (PackagesToSave.Num() > 0)
+	{
+		/*for (UPackage* Package : PackagesToSave)
+		{
+			FString FileName = FPackageName::LongPackageNameToFilename(Package->GetName(), FPackageName::GetAssetPackageExtension());
+			FSavePackageArgs SaveArgs;
+			SaveArgs.SaveFlags = RF_Public | RF_Standalone;
+			UPackage::SavePackage(Package, nullptr, *FileName, SaveArgs);
+		}*/
+		DeferredSaveManager.AddPackagesToSave(PackagesToSave);
+		//SavePackagesWithProgress(PackagesToSave);
+		PackagesToSave.Empty();
+	}
+	
 	OutFragments.Add(FragmentModel);
 
 	//SpatialStructureData.Add(ModelGuidStr, _ss);
@@ -573,16 +595,17 @@ void UFragmentsImporter::SpawnFragmentModel(AFragment* InFragmentModel, AActor* 
 
 			UStaticMesh* Mesh = nullptr;
 			//FString MeshName = FString::Printf(TEXT("sample_%d_%d"), InFragmentModel->GetLocalId(), i);
-			bool bIsNewMesh = false;
-			if (FPaths::FileExists(PackageFileName))
+			if (MeshCache.Contains(SamplePath))
+			{
+				Mesh = MeshCache[SamplePath];
+			}
+			else if (FPaths::FileExists(PackageFileName))
 			{
 				UPackage* ExistingPackage = LoadPackage(nullptr, *PackagePath, LOAD_None);
 				//UStaticMesh* Mesh = Cast<UStaticMesh>(StaticLoadObject(UStaticMesh::StaticClass(), nullptr, *MeshObjectPath));
-				bool bMeshFound = false;
 				if (ExistingPackage)
 				{
 					Mesh = FindObject<UStaticMesh>(ExistingPackage, *MeshName);
-					if (Mesh != nullptr) bMeshFound = true;
 				}
 			}
 			else
@@ -600,37 +623,30 @@ void UFragmentsImporter::SpawnFragmentModel(AFragment* InFragmentModel, AActor* 
 					Mesh = CreateStaticMeshFromCircleExtrusion(circleExtrusion, material, *MeshName, MeshPackage);
 				}
 
-				bIsNewMesh = (Mesh != nullptr);
-
-				if (bIsNewMesh && Mesh)
+				if (Mesh)
 				{
 					if (!FPaths::FileExists(PackageFileName) && bSaveMeshes)
 					{
+#if WITH_EDITOR
 						MeshPackage->FullyLoad();
 
 						Mesh->Rename(*MeshName, MeshPackage);
 						Mesh->SetFlags(RF_Public | RF_Standalone);
-						Mesh->Build();
+						//Mesh->Build();
 						MeshPackage->MarkPackageDirty();
 						FAssetRegistryModule::AssetCreated(Mesh);
-						UE_LOG(LogFragments, Warning, TEXT("Mesh Outer after Rename: %s"), *GetNameSafe(Mesh->GetOuter()));
 
 						FSavePackageArgs SaveArgs;
 						SaveArgs.SaveFlags = RF_Public | RF_Standalone;
 
-						UE_LOG(LogFragments, Warning, TEXT("PackageFileName: %s"), *PackageFileName);
-						if (UPackage::SavePackage(MeshPackage, Mesh, *PackageFileName, SaveArgs))
-						{
-							UE_LOG(LogFragments, Log, TEXT("Packaged saved successfully: %s"), *UniquePackageName);
-						}
-						else
-						{
-							UE_LOG(LogFragments, Log, TEXT("Failed to save package: %s"), *UniquePackageName);
-						}
+						PackagesToSave.Add(MeshPackage);
+#endif
+						//UPackage::SavePackage(MeshPackage, Mesh, *PackageFileName, SaveArgs);
 					}
 				}
-			}
 
+				MeshCache.Add(SamplePath, Mesh);
+			}
 
 			if (Mesh)
 			{
@@ -685,6 +701,9 @@ UStaticMesh* UFragmentsImporter::CreateStaticMeshFromShell(const Shell* ShellRef
 	MeshParams.bCommitMeshDescription = true;
 	MeshParams.bMarkPackageDirty = true;
 	MeshParams.bUseHashAsGuid = false;
+#if !WITH_EDITOR
+	MeshParams.bFastBuild = true;
+#endif
 
 	// Convert Shell Geometry (vertices and triangles)
 	const auto* Points = ShellRef->points();
@@ -883,6 +902,10 @@ UStaticMesh* UFragmentsImporter::CreateStaticMeshFromCircleExtrusion(const Circl
 	MeshParams.bCommitMeshDescription = true;
 	MeshParams.bMarkPackageDirty = true;
 	MeshParams.bUseHashAsGuid = false;
+
+#if !WITH_EDITOR
+	MeshParams.bFastBuild = true;
+#endif
 
 	StaticMesh->BuildFromMeshDescriptions(MeshDescriptionPtrs, MeshParams);
 
@@ -1431,4 +1454,44 @@ TArray<FVector> UFragmentsImporter::SampleRingPoints(const FVector& Center, cons
 		Ring.Add(Point);
 	}
 	return Ring;
+}
+
+void UFragmentsImporter::SavePackagesWithProgress(const TArray<UPackage*>& InPackagesToSave)
+{
+#if WITH_EDITOR
+	if (PackagesToSave.Num() == 0)
+		return;
+
+	// Create a slow task with progress bar and allow cancel
+	FScopedSlowTask SlowTask((float)PackagesToSave.Num(), FText::FromString(TEXT("Saving Static Meshes...")));
+	SlowTask.MakeDialog(true);
+
+	for (UPackage* Package : PackagesToSave)
+	{
+		if (SlowTask.ShouldCancel())
+		{
+			UE_LOG(LogFragments, Warning, TEXT("User canceled saving packages."));
+			break;
+		}
+
+		FString FileName = FPackageName::LongPackageNameToFilename(Package->GetName(), FPackageName::GetAssetPackageExtension());
+		FSavePackageArgs SaveArgs;
+		SaveArgs.SaveFlags = RF_Public | RF_Standalone;
+
+		bool bSuccess = UPackage::SavePackage(Package, nullptr, *FileName, SaveArgs);
+		if (!bSuccess)
+		{
+			UE_LOG(LogFragments, Error, TEXT("Failed to save package: %s"), *Package->GetName());
+		}
+		else
+		{
+			UE_LOG(LogFragments, Log, TEXT("Saved package: %s"), *Package->GetName());
+		}
+
+		SlowTask.EnterProgressFrame(1.f);
+	}
+#else
+	// Runtime: do not save packages, just log
+	UE_LOG(LogFragments, Log, TEXT("Skipping package saving in runtime environment."));
+#endif
 }
