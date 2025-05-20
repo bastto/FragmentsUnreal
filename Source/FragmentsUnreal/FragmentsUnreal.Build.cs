@@ -33,7 +33,8 @@ public class FragmentsUnreal : ModuleRules
 				"MeshDescription",
 				"StaticMeshDescription",
 				"GeometryScriptingCore",
-				"GeometryCore"
+				"GeometryCore",
+				"zlib"
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);

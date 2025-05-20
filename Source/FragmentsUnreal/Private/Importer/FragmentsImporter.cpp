@@ -4,7 +4,7 @@
 #include "Importer/FragmentsImporter.h"
 #include "flatbuffers/flatbuffers.h"
 #include "Serialization/ArchiveLoadCompressedProxy.h"
-#include "ThirdParty/zlib/1.2.13/include/zlib.h"
+#include "zlib.h"
 #include "ProceduralMeshComponent.h"
 #include "Engine/StaticMeshActor.h"
 #include "AssetRegistry/AssetRegistryModule.h"
