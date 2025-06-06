@@ -26,10 +26,11 @@ public:
 
 	FString Process(AActor* OwnerA, const FString& FragPath, TArray<AFragment*>& OutFragments, bool bSaveMeshes = true);
 	void SetOwnerRef(AActor* NewOwnerRef) { OwnerRef = NewOwnerRef; }
-	//TMap<FString, FSpatialStructure> GetSpatialStructures() { return SpatialStructureData; }
 	void GetItemData(AFragment*& InFragment);
 	TArray<FItemAttribute> GetItemPropertySets(AFragment* InFragment);
 	AFragment* GetItemByLocalId(int32 LocalId, const FString& ModelGuid);
+	FString LoadFragment(const FString& FragPath);
+	TArray<int32> GetElementsByCategory(const FString& InCategory, const FString& ModelGuid);
 
 private:
 

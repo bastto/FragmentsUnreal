@@ -33,98 +33,13 @@ UFragmentsImporter::UFragmentsImporter()
 FString UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath, TArray<AFragment*>& OutFragments, bool bSaveMeshes)
 {
 	SetOwnerRef(OwnerA);
-	TArray<uint8> CompressedData;
-	bool bIsCompressed = false;
-	TArray<uint8> Decompressed;
-
-
-	if (!FFileHelper::LoadFileToArray(CompressedData, *FragPath))
-	{
-		UE_LOG(LogFragments, Error, TEXT("Failed to load the compressed file"));
-		return FString();
-	}
-
-	if (CompressedData.Num() >= 2 && CompressedData[0] == 0x78)
-	{
-		bIsCompressed = true;
-		UE_LOG(LogFragments, Log, TEXT("Zlib header detected. Starting decompression..."));
-	}
-
-	if (bIsCompressed)
-	{
-		// Use zlib directly (Unreal's zlib.h)
-		z_stream stream = {};
-		stream.next_in = CompressedData.GetData();
-		stream.avail_in = CompressedData.Num();
-
-		int32 ret = inflateInit(&stream);
-		if (ret != Z_OK)
-		{
-			UE_LOG(LogFragments, Error, TEXT("zlib initialization failed: %d"), ret);
-			return FString();
-		}
-
-		const int32 ChunkSize = 1024 * 1024;
-		int32 TotalOut = 0;
-
-		for (int32 i = 0; i < 100; ++i)
-		{
-			int32 OldSize = Decompressed.Num();
-			Decompressed.AddUninitialized(ChunkSize);
-			stream.next_out = Decompressed.GetData() + OldSize;
-			stream.avail_out = ChunkSize;
-
-			ret = inflate(&stream, Z_NO_FLUSH);
-
-			// Log out more detailed information for debugging
-			//UE_LOG(LogFragments, Log, TEXT("Decompressing chunk %d: avail_in = %d, avail_out = %d, ret = %d"), i, stream.avail_in, stream.avail_out, ret);
-
-			if (ret == Z_STREAM_END)
-			{
-				TotalOut = OldSize + ChunkSize - stream.avail_out;
-				break;
-			}
-			else if (ret != Z_OK)
-			{
-				UE_LOG(LogFragments, Error, TEXT("Decompression failed with error code: %d"), ret);
-				break;
-			}
-		}
-
-		ret = inflateEnd(&stream);
-		if (ret != Z_OK)
-		{
-			UE_LOG(LogFragments, Error, TEXT("zlib end stream failed: %d"), ret);
-			return FString();
-		}
-
-		Decompressed.SetNum(TotalOut);
-		//UE_LOG(LogFragments, Log, TEXT("Decompression complete. Total bytes: %d"), TotalOut);
-	}
-	else
-	{
-		Decompressed = CompressedData;
-		UE_LOG(LogFragments, Log, TEXT("Data appears uncompressed, using raw data"));
-	}
-
-	UFragmentModelWrapper* Wrapper = NewObject<UFragmentModelWrapper>(this);
-	Wrapper->LoadModel(Decompressed);
+	FString ModelGuidStr = LoadFragment(FragPath);
+	
+	UFragmentModelWrapper* Wrapper = *FragmentModels.Find(ModelGuidStr);
 	const Model* ModelRef = Wrapper->GetParsedModel();
-	//PrintModelStructure(ModelRef);
-
-	if (!ModelRef)
-	{
-		UE_LOG(LogFragments, Error, TEXT("Failed to parse Fragments model"));
-		return FString();
-	}
 
 	BaseGlassMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/FragmentsUnreal/Materials/M_BaseFragmentGlassMaterial.M_BaseFragmentGlassMaterial"));
 	BaseMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/FragmentsUnreal/Materials/M_BaseFragmentMaterial.M_BaseFragmentMaterial"));
-
-	const auto* guid = ModelRef->guid();
-	const char* RawModelGuid = guid->c_str();
-	FString ModelGuidStr = UTF8_TO_TCHAR(RawModelGuid);
-	FragmentModels.Add(ModelGuidStr, Wrapper);
 
 	const auto* geometries = ModelRef->geometries();
 	const auto* attributes = ModelRef->attributes();
@@ -295,6 +210,130 @@ AFragment* UFragmentsImporter::GetItemByLocalId(int32 LocalId, const FString& Mo
 		}
 	}
 	return nullptr;
+}
+
+FString UFragmentsImporter::LoadFragment(const FString& FragPath)
+{
+	TArray<uint8> CompressedData;
+	bool bIsCompressed = false;
+	TArray<uint8> Decompressed;
+
+
+	if (!FFileHelper::LoadFileToArray(CompressedData, *FragPath))
+	{
+		UE_LOG(LogFragments, Error, TEXT("Failed to load the compressed file"));
+		return FString();
+	}
+
+	if (CompressedData.Num() >= 2 && CompressedData[0] == 0x78)
+	{
+		bIsCompressed = true;
+		UE_LOG(LogFragments, Log, TEXT("Zlib header detected. Starting decompression..."));
+	}
+
+	if (bIsCompressed)
+	{
+		// Use zlib directly (Unreal's zlib.h)
+		z_stream stream = {};
+		stream.next_in = CompressedData.GetData();
+		stream.avail_in = CompressedData.Num();
+
+		int32 ret = inflateInit(&stream);
+		if (ret != Z_OK)
+		{
+			UE_LOG(LogFragments, Error, TEXT("zlib initialization failed: %d"), ret);
+			return FString();
+		}
+
+		const int32 ChunkSize = 1024 * 1024;
+		int32 TotalOut = 0;
+
+		for (int32 i = 0; i < 100; ++i)
+		{
+			int32 OldSize = Decompressed.Num();
+			Decompressed.AddUninitialized(ChunkSize);
+			stream.next_out = Decompressed.GetData() + OldSize;
+			stream.avail_out = ChunkSize;
+
+			ret = inflate(&stream, Z_NO_FLUSH);
+
+			if (ret == Z_STREAM_END)
+			{
+				TotalOut = OldSize + ChunkSize - stream.avail_out;
+				break;
+			}
+			else if (ret != Z_OK)
+			{
+				UE_LOG(LogFragments, Error, TEXT("Decompression failed with error code: %d"), ret);
+				break;
+			}
+		}
+
+		ret = inflateEnd(&stream);
+		if (ret != Z_OK)
+		{
+			UE_LOG(LogFragments, Error, TEXT("zlib end stream failed: %d"), ret);
+			return FString();
+		}
+
+		Decompressed.SetNum(TotalOut);
+		//UE_LOG(LogFragments, Log, TEXT("Decompression complete. Total bytes: %d"), TotalOut);
+	}
+	else
+	{
+		Decompressed = CompressedData;
+		UE_LOG(LogFragments, Log, TEXT("Data appears uncompressed, using raw data"));
+	}
+
+	UFragmentModelWrapper* Wrapper = NewObject<UFragmentModelWrapper>(this);
+	Wrapper->LoadModel(Decompressed);
+	const Model* ModelRef = Wrapper->GetParsedModel();
+
+	if (!ModelRef)
+	{
+		UE_LOG(LogFragments, Error, TEXT("Failed to parse Fragments model"));
+		return FString();
+	}
+
+
+	const auto* guid = ModelRef->guid();
+	const char* RawModelGuid = guid->c_str();
+	FString ModelGuidStr = UTF8_TO_TCHAR(RawModelGuid);
+	FragmentModels.Add(ModelGuidStr, Wrapper);
+	return ModelGuidStr;
+}
+
+TArray<int32> UFragmentsImporter::GetElementsByCategory(const FString& InCategory, const FString& ModelGuid)
+{
+	TArray<int32> LocalIds;
+
+	if (FragmentModels.Contains(ModelGuid))
+	{
+		UFragmentModelWrapper* Wrapper = *FragmentModels.Find(ModelGuid);
+		const Model* InModel = Wrapper->GetParsedModel();
+
+		if (!InModel)
+			return LocalIds;
+
+		const auto* categories = InModel->categories();
+		const auto* local_ids = InModel->local_ids();
+
+		if (!categories || !local_ids)
+			return LocalIds;
+
+		for (flatbuffers::uoffset_t i = 0; i < categories->size(); i++)
+		{
+			const auto* category = categories->Get(i);
+			FString CategoryName = UTF8_TO_TCHAR(category->c_str());
+
+			if (CategoryName.Equals(InCategory, ESearchCase::IgnoreCase))
+			{
+				int32 LocalId = local_ids->Get(i);
+				LocalIds.Add(LocalId);
+			}
+		}
+	}
+	return LocalIds;
 }
 
 void UFragmentsImporter::CollectPropertiesRecursive(
