@@ -63,13 +63,15 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Fragments")
 	const TArray<struct FFragmentSample>& GetSamples() const { return Samples; }
-	
-	void AddSampleInfo(const struct FFragmentSample& Sample) { Samples.Add(Sample); }
 
+	void AddSampleInfo(const struct FFragmentSample& Sample) { Samples.Add(Sample); }
 	void SetGlobalTransform(const FTransform& InGlobalTransform) { GlobalTransform = InGlobalTransform; }
 	FTransform GetGlobalTransform() const { return GlobalTransform; }
+	void SetData(FFragmentItem InFragmentItem);
 
 private:
+
+	FFragmentItem Data;
 
 	UPROPERTY()
 	FString ModelGuid;

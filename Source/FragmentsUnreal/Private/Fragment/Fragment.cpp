@@ -40,4 +40,15 @@ AFragment* AFragment::FindFragmentByLocalId(int32 InLocalId)
 	return FoundFragment;
 }
 
+void AFragment::SetData(FFragmentItem InFragmentItem)
+{
+	Data = InFragmentItem;
+	ModelGuid = InFragmentItem.ModelGuid;
+	Guid = InFragmentItem.Guid;
+	GlobalTransform = InFragmentItem.GlobalTransform;
+	LocalId = InFragmentItem.LocalId;
+	Category = InFragmentItem.Category;
+	Samples = InFragmentItem.Samples;
+}
+
 

@@ -41,93 +41,8 @@ FString UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath, TAr
 	BaseGlassMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/FragmentsUnreal/Materials/M_BaseFragmentGlassMaterial.M_BaseFragmentGlassMaterial"));
 	BaseMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/FragmentsUnreal/Materials/M_BaseFragmentMaterial.M_BaseFragmentMaterial"));
 
-	const auto* geometries = ModelRef->geometries();
-	const auto* attributes = ModelRef->attributes();
-	const auto* aligments = ModelRef->alignments();
-	const auto* categories = ModelRef->categories();
-	const auto* guids = ModelRef->guids();
-	const auto* guids_items = ModelRef->guids_items();
-	const auto* local_ids = ModelRef->local_ids();
-	const auto max_local_id = ModelRef->max_local_id();
-	const auto* relations = ModelRef->relations();
-	const auto* relations_items = ModelRef->relations_items();
-	const auto* spatial_structure = ModelRef->spatial_structure();
-	const auto* _meshes = ModelRef->meshes();
-
-	FTransform RootTransform = FTransform::Identity;
-	AFragment* FragmentModel = OwnerRef->GetWorld()->SpawnActor<AFragment>(
-		AFragment::StaticClass(), RootTransform);
-	TMap<int32, AFragment*> FragmentLookupMap;
-	FragmentModel->SetGuid(ModelGuidStr);
-	FragmentModel->SetModelGuid(ModelGuidStr);
-	FragmentModel->SetGlobalTransform(RootTransform);
-	UFragmentsUtils::MapModelStructure(spatial_structure, FragmentModel, FragmentLookupMap, TEXT(""));
-
-	FFragmentLookup FragLookup;
-	FragLookup.Fragments = FragmentLookupMap;
-	ModelFragmentsMap.Add(ModelGuidStr, FragLookup);
-	
-	// Loop through samples and spawn meshes
-	if (_meshes)
-	{
-		const auto* samples = _meshes->samples();
-		const auto* representations = _meshes->representations();
-		const auto* coordinates = _meshes->coordinates();
-		const auto* meshes_items = _meshes->meshes_items();
-		const auto* materials = _meshes->materials();
-		const auto* cirle_extrusions = _meshes->circle_extrusions();
-		const auto* shells = _meshes->shells();
-		const auto* local_tranforms = _meshes->local_transforms();
-		const auto* global_transforms = _meshes->global_transforms();
-
-		// Grouping samples by Item ID
-		TMap<int32, TArray<const Sample*>> SamplesByItem;
-		for (flatbuffers::uoffset_t i = 0; i < samples->size(); i++) 
-		{
-			const auto* sample = samples->Get(i);
-			SamplesByItem.FindOrAdd(sample->item()).Add(sample);
-		}
-
-		for (const auto& Item : SamplesByItem)
-		{
-			int32 ItemId = Item.Key;
-
-			const TArray<const Sample*> ItemSamples = Item.Value;
-
-			const auto mesh = meshes_items->Get(ItemId);
-			const auto local_id = local_ids->Get(ItemId);
-			
-			AFragment* FragActor;
-			FragActor = *FragmentLookupMap.Find(local_id);
-
-			FragActor->SetLocalId(local_id);
-			GetItemData(FragActor);
-
-			const auto* global_transform = global_transforms->Get(mesh);
-			FTransform GlobalTransform = UFragmentsUtils::MakeTransform(global_transform);
-			FragActor->SetGlobalTransform(GlobalTransform);
-
-			for (int32 i = 0; i < ItemSamples.Num(); i++)
-			{
-				const Sample* sample = ItemSamples[i];
-				const auto* material = materials->Get(sample->material());
-				const auto* representation = representations->Get(sample->representation());
-				const auto* local_transform = local_tranforms->Get(sample->local_transform());
-
-				FFragmentSample SampleInfo;
-				SampleInfo.SampleIndex = i;
-				SampleInfo.LocalTransformIndex = sample->local_transform();
-				SampleInfo.RepresentationIndex = sample->representation();
-				SampleInfo.MaterialIndex = sample->material();
-
-				FragActor->AddSampleInfo(SampleInfo);
-			}
-
-		}
-	}
-
 	FDateTime StartTime = FDateTime::Now();
-	SpawnFragmentModel(FragmentModel, OwnerRef, _meshes, bSaveMeshes);
+	SpawnFragmentModel(Wrapper->GetModelItem(), OwnerRef, ModelRef->meshes(), bSaveMeshes);
 	UE_LOG(LogFragments, Warning, TEXT("Loaded model in [%s]s -> %s"), *(FDateTime::Now() - StartTime).ToString(), *ModelGuidStr);
 	if (PackagesToSave.Num() > 0)
 	{
@@ -143,7 +58,7 @@ FString UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath, TAr
 		PackagesToSave.Empty();
 	}
 	
-	OutFragments.Add(FragmentModel);
+	//OutFragments.Add(FragmentModel);
 
 	//SpatialStructureData.Add(ModelGuidStr, _ss);
 	return ModelGuidStr;
@@ -181,6 +96,38 @@ void UFragmentsImporter::GetItemData(AFragment*& InFragment)
 	}
 }
 
+void UFragmentsImporter::GetItemData(FFragmentItem& InFragmentItem)
+{
+	if (InFragmentItem.ModelGuid.IsEmpty()) return;
+
+	if (FragmentModels.Contains(InFragmentItem.ModelGuid))
+	{
+		UFragmentModelWrapper* Wrapper = *FragmentModels.Find(InFragmentItem.ModelGuid);
+		const Model* InModel = Wrapper->GetParsedModel();
+
+		int32 ItemIndex = UFragmentsUtils::GetIndexForLocalId(InModel, InFragmentItem.LocalId);
+		if (ItemIndex == INDEX_NONE) return;
+
+		// Attributes
+		const auto* attribute = InModel->attributes()->Get(ItemIndex);
+		TArray<FItemAttribute> ItemAttributes = UFragmentsUtils::ParseItemAttribute(attribute);
+		InFragmentItem.Attributes = ItemAttributes;
+
+		// Category
+		const auto* category = InModel->categories()->Get(ItemIndex);
+		const char* RawCategory = category->c_str();
+		FString CategorySty = UTF8_TO_TCHAR(RawCategory);
+		InFragmentItem.Category = CategorySty;
+		//ItemActor->Tags.Add(FName(CategorySty));
+
+		// Guids
+		const auto* item_guid = InModel->guids()->Get(ItemIndex);
+		const char* RawGuid = item_guid->c_str();
+		FString GuidStr = UTF8_TO_TCHAR(RawGuid);
+		InFragmentItem.Guid = GuidStr;
+	}
+}
+
 TArray<FItemAttribute> UFragmentsImporter::GetItemPropertySets(AFragment* InFragment)
 {
 	TArray<FItemAttribute> CollectedAttributes;
@@ -210,6 +157,20 @@ AFragment* UFragmentsImporter::GetItemByLocalId(int32 LocalId, const FString& Mo
 		}
 	}
 	return nullptr;
+}
+
+FFragmentItem UFragmentsImporter::GetFragmentItemByLocalId(int32 LocalId, const FString& InModelGuid)
+{
+	if (FragmentModels.Contains(InModelGuid))
+	{
+		UFragmentModelWrapper* Wrapper = *FragmentModels.Find(InModelGuid);
+		FFragmentItem FoundItem;
+		if (Wrapper->GetModelItem().FindFragmentByLocalId(LocalId, FoundItem))
+		{
+			return FoundItem;
+		}
+	}
+	return FFragmentItem();
 }
 
 FString UFragmentsImporter::LoadFragment(const FString& FragPath)
@@ -295,11 +256,85 @@ FString UFragmentsImporter::LoadFragment(const FString& FragPath)
 		return FString();
 	}
 
-
 	const auto* guid = ModelRef->guid();
 	const char* RawModelGuid = guid->c_str();
 	FString ModelGuidStr = UTF8_TO_TCHAR(RawModelGuid);
+
+	const auto* spatial_structure = ModelRef->spatial_structure();
+	FTransform RootTransform = FTransform::Identity;
+	FFragmentItem FragmentItem;
+	FragmentItem.Guid = ModelGuidStr;
+	FragmentItem.ModelGuid = ModelGuidStr;
+	FragmentItem.GlobalTransform = RootTransform;
+	UFragmentsUtils::MapModelStructureToData(spatial_structure, FragmentItem, TEXT(""));
+
+	Wrapper->SetModelItem(FragmentItem);
 	FragmentModels.Add(ModelGuidStr, Wrapper);
+
+	const auto* local_ids = ModelRef->local_ids();
+	const auto* _meshes = ModelRef->meshes();
+
+	// Loop through samples and spawn meshes
+	if (_meshes)
+	{
+		const auto* samples = _meshes->samples();
+		const auto* representations = _meshes->representations();
+		const auto* coordinates = _meshes->coordinates();
+		const auto* meshes_items = _meshes->meshes_items();
+		const auto* materials = _meshes->materials();
+		const auto* cirle_extrusions = _meshes->circle_extrusions();
+		const auto* shells = _meshes->shells();
+		const auto* local_tranforms = _meshes->local_transforms();
+		const auto* global_transforms = _meshes->global_transforms();
+
+		// Grouping samples by Item ID
+		TMap<int32, TArray<const Sample*>> SamplesByItem;
+		for (flatbuffers::uoffset_t i = 0; i < samples->size(); i++)
+		{
+			const auto* sample = samples->Get(i);
+			SamplesByItem.FindOrAdd(sample->item()).Add(sample);
+		}
+
+		for (const auto& Item : SamplesByItem)
+		{
+			int32 ItemId = Item.Key;
+
+			const TArray<const Sample*> ItemSamples = Item.Value;
+
+			const auto mesh = meshes_items->Get(ItemId);
+			const auto local_id = local_ids->Get(ItemId);
+
+			FFragmentItem FoundFragmentItem;
+			if (!Wrapper->GetModelItem().FindFragmentByLocalId(local_id, FoundFragmentItem))
+			{
+				return FString();
+			}
+
+			GetItemData(FoundFragmentItem);
+
+			const auto* global_transform = global_transforms->Get(mesh);
+			FTransform GlobalTransform = UFragmentsUtils::MakeTransform(global_transform);
+			FoundFragmentItem.GlobalTransform = GlobalTransform;
+
+			for (int32 i = 0; i < ItemSamples.Num(); i++)
+			{
+				const Sample* sample = ItemSamples[i];
+				const auto* material = materials->Get(sample->material());
+				const auto* representation = representations->Get(sample->representation());
+				const auto* local_transform = local_tranforms->Get(sample->local_transform());
+
+				FFragmentSample SampleInfo;
+				SampleInfo.SampleIndex = i;
+				SampleInfo.LocalTransformIndex = sample->local_transform();
+				SampleInfo.RepresentationIndex = sample->representation();
+				SampleInfo.MaterialIndex = sample->material();
+
+				FoundFragmentItem.Samples.Add(SampleInfo);
+			}
+
+		}
+	}
+
 	return ModelGuidStr;
 }
 
@@ -396,122 +431,7 @@ void UFragmentsImporter::CollectPropertiesRecursive(
 			}
 		}
 	}
-
-	// Iterate all relations to find ones associated with StartLocalId
-	//for (flatbuffers::uoffset_t i = 0; i < relations_items->size(); i++)
-	//{
-	//	if (relations_items->Get(i) != StartLocalId) continue;
-
-	//	const auto* Relation = relations->Get(i);
-	//	if (!Relation || !Relation->data()) continue;
-
-	//	for (flatbuffers::uoffset_t j = 0; j < Relation->data()->size(); j++)
-	//	{
-	//		const char* RawStr = Relation->data()->Get(j)->c_str();
-	//		FString Cleaned = UTF8_TO_TCHAR(RawStr);
-
-	//		TArray<FString> Tokens;
-	//		Cleaned.Replace(TEXT("["), TEXT(""))
-	//			.Replace(TEXT("]"), TEXT(""))
-	//			.ParseIntoArray(Tokens, TEXT(","), true);
-
-	//		if (Tokens.Num() < 2) continue;
-
-	//		FString RelationName = Tokens[0].TrimStartAndEnd().Replace(TEXT("\""), TEXT(""));
-
-	//		for (int32 k = 1; k < Tokens.Num(); ++k)
-	//		{
-	//			int32 RelatedLocalId = FCString::Atoi(*Tokens[k].TrimStartAndEnd());
-
-	//			if (RelationName.Equals(TEXT("HasProperties")))
-	//			{
-	//				// Use GetIndexForLocalId to resolve RelatedLocalId to attribute index
-	//				int32 AttrIndex = UFragmentsUtils::GetIndexForLocalId(InModel, RelatedLocalId);
-	//				if (AttrIndex != INDEX_NONE)
-	//				{
-	//					const auto* Attr = attributes->Get(AttrIndex);
-	//					if (Attr)
-	//					{
-	//						TArray<FItemAttribute> Props = UFragmentsUtils::ParseItemAttribute(Attr);
-	//						OutAttributes.Append(Props);
-	//					}
-	//				}
-	//			}
-	//			else if (RelationName.Equals(TEXT("IsDefinedBy")))
-	//			{
-	//				// Recurse deeper
-	//				CollectPropertiesRecursive(InModel, RelatedLocalId, Visited, OutAttributes);
-	//			}
-	//		}
-	//	}
-	//}
 }
-//void UFragmentsImporter::SpawnFragmentTreeWithMeshes(
-//	const SpatialStructure* Node,
-//	AActor* Parent,
-//	const TMap<int32, FFragmentMeshData>& MeshMap,
-//	const Meshes* MeshAssets // container for shells/materials/etc
-//)
-//{
-//	if (!Node || !Parent) return;
-//	UWorld* World = Parent->GetWorld();
-//	if (!World) return;
-//
-//	int32 LocalId = Node->local_id().has_value() ? Node->local_id().value() : -1;
-//
-//	// Create Fragment Actor
-//	AFragment* FragmentActor = World->SpawnActor<AFragment>(AFragment::StaticClass());
-//	if (LocalId != -1) FragmentActor->SetLocalId(LocalId);
-//	if (Node->category()) FragmentActor->SetCategory(UTF8_TO_TCHAR(Node->category()->c_str()));
-//
-//	if (Parent)
-//		FragmentActor->AttachToActor(Parent, FAttachmentTransformRules::KeepRelativeTransform);
-//
-//	// Mesh info?
-//	if (MeshMap.Contains(LocalId)) {
-//		const FFragmentMeshData& Data = MeshMap[LocalId];
-//		FragmentActor->SetGuid(UTF8_TO_TCHAR(Data.Guid));
-//		FragmentActor->SetActorTransform(Data.GlobalTransform);
-//
-//		if (Data.Attributes)
-//			FragmentActor->SetAttributes(UFragmentsUtils::ParseItemAttribute(Data.Attributes));
-//
-//		// Setup root component
-//		USceneComponent* Root = NewObject<USceneComponent>(FragmentActor);
-//		Root->RegisterComponent();
-//		FragmentActor->SetRootComponent(Root);
-//
-//		// Add meshes
-//		for (int32 i = 0; i < Data.Samples.Num(); i++) {
-//			const Sample* Sample = Data.Samples[i];
-//			FTransform LocalT = UFragmentsUtils::MakeTransform(MeshAssets->local_transforms()->Get(Sample->local_transform()));
-//
-//			const Representation* Rep = MeshAssets->representations()->Get(Sample->representation());
-//			UStaticMesh* Mesh = nullptr;
-//
-//			if (Rep->representation_class() == RepresentationClass::RepresentationClass_SHELL)
-//				Mesh = CreateStaticMeshFromShell(MeshAssets->shells()->Get(Rep->id()), MeshAssets->materials()->Get(Sample->material()), TEXT("Shell"), TEXT("/Game/Fragments"));
-//			else if (Rep->representation_class() == RepresentationClass_CIRCLE_EXTRUSION)
-//				Mesh = CreateStaticMeshFromCircleExtrusion(MeshAssets->circle_extrusions()->Get(Rep->id()), MeshAssets->materialsMaterials->Get(Sample->material()), TEXT("Circle"), TEXT("/Game/Fragments"));
-//
-//			if (Mesh) {
-//				UStaticMeshComponent* Comp = NewObject<UStaticMeshComponent>(FragmentActor);
-//				Comp->SetStaticMesh(Mesh);
-//				Comp->SetRelativeTransform(LocalT);
-//				Comp->AttachToComponent(Root, FAttachmentTransformRules::KeepRelativeTransform);
-//				Comp->RegisterComponent();
-//				FragmentActor->AddInstanceComponent(Comp);
-//			}
-//		}
-//	}
-//
-//	// Recurse children
-//	if (Node->children()) {
-//		for (auto* Child : *Node->children()) {
-//			SpawnFragmentTreeWithMeshes(Child, FragmentActor, WorldContext, MeshMap, MeshAssets);
-//		}
-//	}
-//}
 
 
 void UFragmentsImporter::SpawnStaticMesh(UStaticMesh* StaticMesh,const Transform* LocalTransform, const Transform* GlobalTransform, AActor* Owner, FName OptionalTag)
@@ -705,6 +625,128 @@ void UFragmentsImporter::SpawnFragmentModel(AFragment* InFragmentModel, AActor* 
 	for (AFragment* Child : InFragmentModel->GetChildren())
 	{
 		SpawnFragmentModel(Child, InFragmentModel, MeshesRef, bSaveMeshes);
+	}
+}
+
+void UFragmentsImporter::SpawnFragmentModel(FFragmentItem InFragmentItem, AActor* InParent, const Meshes* MeshesRef, bool bSaveMeshes)
+{
+	if (!InParent) return;
+
+	// Create AFragment
+
+	AFragment* FragmentModel = OwnerRef->GetWorld()->SpawnActor<AFragment>(
+		AFragment::StaticClass(), InFragmentItem.GlobalTransform);
+
+	// Root Component
+	USceneComponent* RootSceneComponent = NewObject<USceneComponent>(FragmentModel);
+	RootSceneComponent->RegisterComponent();
+	FragmentModel->SetRootComponent(RootSceneComponent);
+	RootSceneComponent->SetMobility(EComponentMobility::Movable);
+
+	// Set Transform and Info
+	FragmentModel->SetData(InFragmentItem);
+	FragmentModel->AttachToActor(InParent, FAttachmentTransformRules::KeepWorldTransform);
+
+#if WITH_EDITOR
+	if (!FragmentModel->GetCategory().IsEmpty())
+		FragmentModel->SetActorLabel(FragmentModel->GetCategory());
+#endif
+
+	// Create Meshes If Sample Exists
+	const TArray<FFragmentSample>& Samples = FragmentModel->GetSamples();
+	if (Samples.Num() > 0)
+	{
+		for (int32 i = 0; i < Samples.Num(); i++)
+		{
+			const FFragmentSample& Sample = Samples[i];
+
+			//FString PackagePath = FString::Printf(TEXT("/Game/Buildings/%s"), *InFragmentModel->GetModelGuid());
+			FString MeshName = FString::Printf(TEXT("%d_%d"), FragmentModel->GetLocalId(), i);
+			FString PackagePath = TEXT("/Game/Buildings") / FragmentModel->GetModelGuid() / MeshName;
+			const FString SamplePath = PackagePath + TEXT(".") + MeshName;
+
+			FString UniquePackageName = FPackageName::ObjectPathToPackageName(PackagePath);
+			FString PackageFileName = FPackageName::LongPackageNameToFilename(UniquePackageName, FPackageName::GetAssetPackageExtension());
+
+			const Material* material = MeshesRef->materials()->Get(Sample.MaterialIndex);
+			const Representation* representation = MeshesRef->representations()->Get(Sample.RepresentationIndex);
+			const Transform* local_transform = MeshesRef->local_transforms()->Get(Sample.LocalTransformIndex);
+
+			FTransform LocalTransform = UFragmentsUtils::MakeTransform(local_transform);
+
+			UStaticMesh* Mesh = nullptr;
+			//FString MeshName = FString::Printf(TEXT("sample_%d_%d"), InFragmentModel->GetLocalId(), i);
+			if (MeshCache.Contains(SamplePath))
+			{
+				Mesh = MeshCache[SamplePath];
+			}
+			else if (FPaths::FileExists(PackageFileName))
+			{
+				UPackage* ExistingPackage = LoadPackage(nullptr, *PackagePath, LOAD_None);
+				//UStaticMesh* Mesh = Cast<UStaticMesh>(StaticLoadObject(UStaticMesh::StaticClass(), nullptr, *MeshObjectPath));
+				if (ExistingPackage)
+				{
+					Mesh = FindObject<UStaticMesh>(ExistingPackage, *MeshName);
+				}
+			}
+			else
+			{
+				UPackage* MeshPackage = CreatePackage(*PackagePath);
+				if (representation->representation_class() == RepresentationClass::RepresentationClass_SHELL)
+				{
+					const auto* shell = MeshesRef->shells()->Get(representation->id());
+					Mesh = CreateStaticMeshFromShell(shell, material, *MeshName, MeshPackage);
+
+				}
+				else if (representation->representation_class() == RepresentationClass_CIRCLE_EXTRUSION)
+				{
+					const auto* circleExtrusion = MeshesRef->circle_extrusions()->Get(representation->id());
+					Mesh = CreateStaticMeshFromCircleExtrusion(circleExtrusion, material, *MeshName, MeshPackage);
+				}
+
+				if (Mesh)
+				{
+					if (!FPaths::FileExists(PackageFileName) && bSaveMeshes)
+					{
+#if WITH_EDITOR
+						MeshPackage->FullyLoad();
+
+						Mesh->Rename(*MeshName, MeshPackage);
+						Mesh->SetFlags(RF_Public | RF_Standalone);
+						//Mesh->Build();
+						MeshPackage->MarkPackageDirty();
+						FAssetRegistryModule::AssetCreated(Mesh);
+
+						FSavePackageArgs SaveArgs;
+						SaveArgs.SaveFlags = RF_Public | RF_Standalone;
+
+						PackagesToSave.Add(MeshPackage);
+#endif
+						//UPackage::SavePackage(MeshPackage, Mesh, *PackageFileName, SaveArgs);
+					}
+				}
+
+				MeshCache.Add(SamplePath, Mesh);
+			}
+
+			if (Mesh)
+			{
+
+				// Add StaticMeshComponent to parent actor
+				UStaticMeshComponent* MeshComp = NewObject<UStaticMeshComponent>(FragmentModel);
+				MeshComp->SetStaticMesh(Mesh);
+				MeshComp->SetRelativeTransform(LocalTransform); // local to parent
+				MeshComp->AttachToComponent(RootSceneComponent, FAttachmentTransformRules::KeepRelativeTransform);
+				MeshComp->RegisterComponent();
+				FragmentModel->AddInstanceComponent(MeshComp);
+			}
+		}
+	}
+
+	// Recursively spawn child fragments
+	for (FFragmentItem Child : InFragmentItem.FragmentChildren)
+	{
+		SpawnFragmentModel(Child, FragmentModel, MeshesRef, bSaveMeshes);
 	}
 }
 
