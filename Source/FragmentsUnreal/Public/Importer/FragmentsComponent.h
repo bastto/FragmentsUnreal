@@ -42,5 +42,6 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Fragments|Importer")
 	AFragment* GetItemByLocalId(int32 LocalId, const FString& ModelGuid);
+
 	
 };

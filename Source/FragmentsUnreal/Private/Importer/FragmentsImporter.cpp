@@ -46,21 +46,10 @@ FString UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath, TAr
 	UE_LOG(LogFragments, Warning, TEXT("Loaded model in [%s]s -> %s"), *(FDateTime::Now() - StartTime).ToString(), *ModelGuidStr);
 	if (PackagesToSave.Num() > 0)
 	{
-		/*for (UPackage* Package : PackagesToSave)
-		{
-			FString FileName = FPackageName::LongPackageNameToFilename(Package->GetName(), FPackageName::GetAssetPackageExtension());
-			FSavePackageArgs SaveArgs;
-			SaveArgs.SaveFlags = RF_Public | RF_Standalone;
-			UPackage::SavePackage(Package, nullptr, *FileName, SaveArgs);
-		}*/
 		DeferredSaveManager.AddPackagesToSave(PackagesToSave);
-		//SavePackagesWithProgress(PackagesToSave);
 		PackagesToSave.Empty();
 	}
 	
-	//OutFragments.Add(FragmentModel);
-
-	//SpatialStructureData.Add(ModelGuidStr, _ss);
 	return ModelGuidStr;
 }
 
@@ -96,35 +85,35 @@ void UFragmentsImporter::GetItemData(AFragment*& InFragment)
 	}
 }
 
-void UFragmentsImporter::GetItemData(FFragmentItem& InFragmentItem)
+void UFragmentsImporter::GetItemData(FFragmentItem* InFragmentItem)
 {
-	if (InFragmentItem.ModelGuid.IsEmpty()) return;
+	if (InFragmentItem->ModelGuid.IsEmpty()) return;
 
-	if (FragmentModels.Contains(InFragmentItem.ModelGuid))
+	if (FragmentModels.Contains(InFragmentItem->ModelGuid))
 	{
-		UFragmentModelWrapper* Wrapper = *FragmentModels.Find(InFragmentItem.ModelGuid);
+		UFragmentModelWrapper* Wrapper = *FragmentModels.Find(InFragmentItem->ModelGuid);
 		const Model* InModel = Wrapper->GetParsedModel();
 
-		int32 ItemIndex = UFragmentsUtils::GetIndexForLocalId(InModel, InFragmentItem.LocalId);
+		int32 ItemIndex = UFragmentsUtils::GetIndexForLocalId(InModel, InFragmentItem->LocalId);
 		if (ItemIndex == INDEX_NONE) return;
 
 		// Attributes
 		const auto* attribute = InModel->attributes()->Get(ItemIndex);
 		TArray<FItemAttribute> ItemAttributes = UFragmentsUtils::ParseItemAttribute(attribute);
-		InFragmentItem.Attributes = ItemAttributes;
+		InFragmentItem->Attributes = ItemAttributes;
 
 		// Category
 		const auto* category = InModel->categories()->Get(ItemIndex);
 		const char* RawCategory = category->c_str();
 		FString CategorySty = UTF8_TO_TCHAR(RawCategory);
-		InFragmentItem.Category = CategorySty;
+		InFragmentItem->Category = CategorySty;
 		//ItemActor->Tags.Add(FName(CategorySty));
 
 		// Guids
 		const auto* item_guid = InModel->guids()->Get(ItemIndex);
 		const char* RawGuid = item_guid->c_str();
 		FString GuidStr = UTF8_TO_TCHAR(RawGuid);
-		InFragmentItem.Guid = GuidStr;
+		InFragmentItem->Guid = GuidStr;
 	}
 }
 
@@ -159,18 +148,18 @@ AFragment* UFragmentsImporter::GetItemByLocalId(int32 LocalId, const FString& Mo
 	return nullptr;
 }
 
-FFragmentItem UFragmentsImporter::GetFragmentItemByLocalId(int32 LocalId, const FString& InModelGuid)
+FFragmentItem* UFragmentsImporter::GetFragmentItemByLocalId(int32 LocalId, const FString& InModelGuid)
 {
 	if (FragmentModels.Contains(InModelGuid))
 	{
 		UFragmentModelWrapper* Wrapper = *FragmentModels.Find(InModelGuid);
-		FFragmentItem FoundItem;
+		FFragmentItem* FoundItem;
 		if (Wrapper->GetModelItem().FindFragmentByLocalId(LocalId, FoundItem))
 		{
 			return FoundItem;
 		}
 	}
-	return FFragmentItem();
+	return nullptr;
 }
 
 FString UFragmentsImporter::LoadFragment(const FString& FragPath)
@@ -304,7 +293,7 @@ FString UFragmentsImporter::LoadFragment(const FString& FragPath)
 			const auto mesh = meshes_items->Get(ItemId);
 			const auto local_id = local_ids->Get(ItemId);
 
-			FFragmentItem FoundFragmentItem;
+			FFragmentItem* FoundFragmentItem = nullptr;
 			if (!Wrapper->GetModelItem().FindFragmentByLocalId(local_id, FoundFragmentItem))
 			{
 				return FString();
@@ -314,7 +303,7 @@ FString UFragmentsImporter::LoadFragment(const FString& FragPath)
 
 			const auto* global_transform = global_transforms->Get(mesh);
 			FTransform GlobalTransform = UFragmentsUtils::MakeTransform(global_transform);
-			FoundFragmentItem.GlobalTransform = GlobalTransform;
+			FoundFragmentItem->GlobalTransform = GlobalTransform;
 
 			for (int32 i = 0; i < ItemSamples.Num(); i++)
 			{
@@ -329,13 +318,36 @@ FString UFragmentsImporter::LoadFragment(const FString& FragPath)
 				SampleInfo.RepresentationIndex = sample->representation();
 				SampleInfo.MaterialIndex = sample->material();
 
-				FoundFragmentItem.Samples.Add(SampleInfo);
+				FoundFragmentItem->Samples.Add(SampleInfo);
 			}
 
 		}
 	}
+	ModelFragmentsMap.Add(ModelGuidStr, FFragmentLookup());
 
 	return ModelGuidStr;
+}
+
+void UFragmentsImporter::ProcessLoadedFragment(const FString& InModelGuid, AActor* InOwnerRef, bool bInSaveMesh)
+{
+	if (!InOwnerRef) return;
+
+	SetOwnerRef(InOwnerRef);
+
+	UFragmentModelWrapper* Wrapper = *FragmentModels.Find(InModelGuid);
+	const Model* ModelRef = Wrapper->GetParsedModel();
+
+	BaseGlassMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/FragmentsUnreal/Materials/M_BaseFragmentGlassMaterial.M_BaseFragmentGlassMaterial"));
+	BaseMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/FragmentsUnreal/Materials/M_BaseFragmentMaterial.M_BaseFragmentMaterial"));
+	
+	FDateTime StartTime = FDateTime::Now();
+	SpawnFragmentModel(Wrapper->GetModelItem(), OwnerRef, ModelRef->meshes(), bInSaveMesh);
+	UE_LOG(LogFragments, Warning, TEXT("Loaded model in [%s]s -> %s"), *(FDateTime::Now() - StartTime).ToString(), *InModelGuid);
+	if (PackagesToSave.Num() > 0)
+	{
+		DeferredSaveManager.AddPackagesToSave(PackagesToSave);
+		PackagesToSave.Empty();
+	}
 }
 
 TArray<int32> UFragmentsImporter::GetElementsByCategory(const FString& InCategory, const FString& ModelGuid)
@@ -644,6 +656,7 @@ void UFragmentsImporter::SpawnFragmentModel(FFragmentItem InFragmentItem, AActor
 	RootSceneComponent->SetMobility(EComponentMobility::Movable);
 
 	// Set Transform and Info
+	//FragmentModel->SetActorTransform(InFragmentItem.GlobalTransform);
 	FragmentModel->SetData(InFragmentItem);
 	FragmentModel->AttachToActor(InParent, FAttachmentTransformRules::KeepWorldTransform);
 
@@ -743,10 +756,15 @@ void UFragmentsImporter::SpawnFragmentModel(FFragmentItem InFragmentItem, AActor
 		}
 	}
 
-	// Recursively spawn child fragments
-	for (FFragmentItem Child : InFragmentItem.FragmentChildren)
+	if (ModelFragmentsMap.Contains(InFragmentItem.ModelGuid))
 	{
-		SpawnFragmentModel(Child, FragmentModel, MeshesRef, bSaveMeshes);
+		ModelFragmentsMap[InFragmentItem.ModelGuid].Fragments.Add(InFragmentItem.LocalId, FragmentModel);
+	}
+
+	// Recursively spawn child fragments
+	for (FFragmentItem* Child : InFragmentItem.FragmentChildren)
+	{
+		SpawnFragmentModel(*Child, FragmentModel, MeshesRef, bSaveMeshes);
 	}
 }
 

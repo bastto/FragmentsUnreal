@@ -182,16 +182,16 @@ void UFragmentsUtils::MapModelStructureToData(const SpatialStructure* InS, FFrag
 	const bool bEffectiveCategory = bHasCategory || !InheritedCategory.IsEmpty();
 	const bool bShouldStore = bHasLocalId && bEffectiveCategory;
 
-	FFragmentItem FragmentItem;
+	FFragmentItem* FragmentItem = new FFragmentItem();
 	// Only proceed if we need to store the fragment data
 	if (bShouldStore)
 	{
 		// Create a new FFragmentItem
 
 		// Populate the fragment item with data from the SpatialStructure
-		FragmentItem.ModelGuid = ParentItem.ModelGuid;
-		FragmentItem.LocalId = InS->local_id().value();
-		FragmentItem.Category = ThisCategory;
+		FragmentItem->ModelGuid = ParentItem.ModelGuid;
+		FragmentItem->LocalId = InS->local_id().value();
+		FragmentItem->Category = ThisCategory;
 
 		// Store this FragmentItem as a child of the parent fragment item
 		ParentItem.FragmentChildren.Add(FragmentItem);
@@ -205,7 +205,7 @@ void UFragmentsUtils::MapModelStructureToData(const SpatialStructure* InS, FFrag
 		for (flatbuffers::uoffset_t i = 0; i < InS->children()->size(); i++)
 		{
 			// Recursively add child fragments
-			MapModelStructureToData(InS->children()->Get(i), bShouldStore ? ParentItem.FragmentChildren.Last() : ParentItem, ThisCategory);
+			MapModelStructureToData(InS->children()->Get(i), bShouldStore ? *ParentItem.FragmentChildren.Last() : ParentItem, ThisCategory);
 		}
 	}
 }

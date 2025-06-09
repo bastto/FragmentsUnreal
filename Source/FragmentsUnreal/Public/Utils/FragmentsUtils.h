@@ -149,30 +149,34 @@ struct FItemAttribute
 		:Key(InKey), Value(InValue), TypeHash(InTypeHash) {}
 };
 
+USTRUCT()
 struct FFragmentItem
 {
+
+	GENERATED_BODY()
+
 	FString ModelGuid;
 	int32 LocalId;
 	FString Category;
 	FString Guid;
 	TArray<FItemAttribute> Attributes;  // List of attributes for the fragment
-	TArray<FFragmentItem> FragmentChildren;  // Use TObjectPtr for nested recursion
+	TArray <FFragmentItem*> FragmentChildren;  // Use TObjectPtr for nested recursion
 	TArray<FFragmentSample> Samples;
 	FTransform GlobalTransform;
 
-	bool FindFragmentByLocalId(int32 InLocalId, FFragmentItem& OutItem)
+	bool FindFragmentByLocalId(int32 InLocalId, FFragmentItem*& OutItem)
 	{
 		// Check if the current item matches the LocalId
 		if (LocalId == InLocalId)
 		{
-			OutItem = *this;
+			OutItem = this;
 			return true;
 		}
 
 		// If not, search through all children recursively
-		for (FFragmentItem& Child : FragmentChildren)
+		for (FFragmentItem* Child : FragmentChildren)
 		{
-			if (Child.FindFragmentByLocalId(InLocalId, OutItem))
+			if (Child->FindFragmentByLocalId(InLocalId, OutItem))
 			{
 				return true;
 			}
