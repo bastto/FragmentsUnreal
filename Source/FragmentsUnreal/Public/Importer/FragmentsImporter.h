@@ -27,9 +27,12 @@ public:
 	FString Process(AActor* OwnerA, const FString& FragPath, TArray<AFragment*>& OutFragments, bool bSaveMeshes = true);
 	void SetOwnerRef(AActor* NewOwnerRef) { OwnerRef = NewOwnerRef; }
 	void GetItemData(AFragment*& InFragment);
+	void GetItemData(FFragmentItem* InFragmentItem);
 	TArray<FItemAttribute> GetItemPropertySets(AFragment* InFragment);
 	AFragment* GetItemByLocalId(int32 LocalId, const FString& ModelGuid);
+	FFragmentItem* GetFragmentItemByLocalId(int32 LocalId, const FString& InModelGuid);
 	FString LoadFragment(const FString& FragPath);
+	void ProcessLoadedFragment(const FString& ModelGuid, AActor* InOwnerRef, bool bInSaveMesh);
 	TArray<int32> GetElementsByCategory(const FString& InCategory, const FString& ModelGuid);
 
 private:
@@ -37,6 +40,7 @@ private:
 	void CollectPropertiesRecursive(const Model* InModel, int32 StartLocalId, TSet<int32>& Visited, TArray<FItemAttribute>& OutAttributes);
 	void SpawnStaticMesh(UStaticMesh* StaticMesh, const Transform* LocalTransform, const Transform* GlobalTransform, AActor* Owner, FName OptionalTag = FName());
 	void SpawnFragmentModel(AFragment* InFragmentModel, AActor* InParent, const Meshes* MeshesRef, bool bSaveMeshes);
+	void SpawnFragmentModel(FFragmentItem InFragmentItem, AActor* InParent, const Meshes* MeshesRef, bool bSaveMeshes);
 	UStaticMesh* CreateStaticMeshFromShell(
 		const Shell* ShellRef,
 		const Material* RefMaterial,
@@ -79,11 +83,9 @@ private:
 	UPROPERTY()
 	UMaterialInterface* BaseGlassMaterial = nullptr;
 
-	/*UPROPERTY()
-	TMap<FString, FSpatialStructure> SpatialStructureData;*/
 	UPROPERTY()
 	TMap<FString, class UFragmentModelWrapper*> FragmentModels;
-	
+
 	UPROPERTY()
 	TMap<FString, FFragmentLookup> ModelFragmentsMap;
 

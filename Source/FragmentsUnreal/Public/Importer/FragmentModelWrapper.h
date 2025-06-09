@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
 #include "Index/index_generated.h"
+#include "Utils/FragmentsUtils.h"
 #include "FragmentModelWrapper.generated.h"
 
 /**
@@ -23,6 +24,8 @@ private:
 
 	const Model* ParsedModel = nullptr;
 
+	FFragmentItem ModelItem;
+
 
 public:
 	void LoadModel(const TArray<uint8>& InBuffer)
@@ -32,5 +35,8 @@ public:
 	}
 
 	const Model* GetParsedModel() { return ParsedModel; }
+
+	void SetModelItem(FFragmentItem InModelItem) { ModelItem = InModelItem; }
+	FFragmentItem GetModelItem() { return ModelItem; }
 
 };

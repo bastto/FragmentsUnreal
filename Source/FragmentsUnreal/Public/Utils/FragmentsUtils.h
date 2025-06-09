@@ -149,6 +149,43 @@ struct FItemAttribute
 		:Key(InKey), Value(InValue), TypeHash(InTypeHash) {}
 };
 
+USTRUCT()
+struct FFragmentItem
+{
+
+	GENERATED_BODY()
+
+	FString ModelGuid;
+	int32 LocalId;
+	FString Category;
+	FString Guid;
+	TArray<FItemAttribute> Attributes;  // List of attributes for the fragment
+	TArray <FFragmentItem*> FragmentChildren;  // Use TObjectPtr for nested recursion
+	TArray<FFragmentSample> Samples;
+	FTransform GlobalTransform;
+
+	bool FindFragmentByLocalId(int32 InLocalId, FFragmentItem*& OutItem)
+	{
+		// Check if the current item matches the LocalId
+		if (LocalId == InLocalId)
+		{
+			OutItem = this;
+			return true;
+		}
+
+		// If not, search through all children recursively
+		for (FFragmentItem* Child : FragmentChildren)
+		{
+			if (Child->FindFragmentByLocalId(InLocalId, OutItem))
+			{
+				return true;
+			}
+		}
+
+		// If no match is found, return nullptr
+		return false;
+	}
+};
 
 /**
  * 
@@ -166,6 +203,7 @@ public:
 	static bool IsClockwise(const TArray<FVector2D>& Points);
 	static TArray<FItemAttribute> ParseItemAttribute(const Attribute* Attr);
 	static class AFragment* MapModelStructure(const SpatialStructure* InS, AFragment*& ParentActor, TMap<int32, AFragment*>& FragmentLookupMapRef, const FString& InheritedCategory);
+	static void MapModelStructureToData(const SpatialStructure* InS, FFragmentItem& ParentItem, const FString& InheritedCategory);
 	static FString GetIfcCategory(const int64 InTypeHash);
 	static float SafeComponent(float Value);
 	static FVector SafeVector(const FVector& Vec);
