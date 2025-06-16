@@ -34,6 +34,7 @@ public:
 	FString LoadFragment(const FString& FragPath);
 	void ProcessLoadedFragment(const FString& ModelGuid, AActor* InOwnerRef, bool bInSaveMesh);
 	TArray<int32> GetElementsByCategory(const FString& InCategory, const FString& ModelGuid);
+	void UnloadFragment(const FString& ModelGuid);
 
 private:
 

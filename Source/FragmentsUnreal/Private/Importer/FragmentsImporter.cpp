@@ -398,6 +398,26 @@ TArray<int32> UFragmentsImporter::GetElementsByCategory(const FString& InCategor
 	return LocalIds;
 }
 
+void UFragmentsImporter::UnloadFragment(const FString& ModelGuid)
+{
+	if (FFragmentLookup* Lookup = ModelFragmentsMap.Find(ModelGuid))
+	{
+		for (TPair<int32, AFragment*> Obj : Lookup->Fragments)
+		{
+			Obj.Value->Destroy();
+		}
+		ModelFragmentsMap.Remove(ModelGuid);
+	}
+
+	if (UFragmentModelWrapper** WrapperPtr = FragmentModels.Find(ModelGuid))
+	{
+		UFragmentModelWrapper* Wrapper = *WrapperPtr;
+
+		Wrapper = nullptr;
+		FragmentModels.Remove(ModelGuid);
+	}
+}
+
 void UFragmentsImporter::CollectPropertiesRecursive(
 	const Model* InModel,
 	int32 StartLocalId,
