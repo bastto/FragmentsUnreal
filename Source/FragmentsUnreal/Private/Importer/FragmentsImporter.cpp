@@ -95,25 +95,40 @@ void UFragmentsImporter::GetItemData(FFragmentItem* InFragmentItem)
 		const Model* InModel = Wrapper->GetParsedModel();
 
 		int32 ItemIndex = UFragmentsUtils::GetIndexForLocalId(InModel, InFragmentItem->LocalId);
+		flatbuffers::uoffset_t ii = ItemIndex;
 		if (ItemIndex == INDEX_NONE) return;
 
 		// Attributes
-		const auto* attribute = InModel->attributes()->Get(ItemIndex);
-		TArray<FItemAttribute> ItemAttributes = UFragmentsUtils::ParseItemAttribute(attribute);
-		InFragmentItem->Attributes = ItemAttributes;
+		if (ii < InModel->attributes()->size())
+		{
+			const auto* attribute = InModel->attributes()->Get(ItemIndex);
+			TArray<FItemAttribute> ItemAttributes = UFragmentsUtils::ParseItemAttribute(attribute);
+			InFragmentItem->Attributes = ItemAttributes;
+		}
 
 		// Category
-		const auto* category = InModel->categories()->Get(ItemIndex);
-		const char* RawCategory = category->c_str();
-		FString CategorySty = UTF8_TO_TCHAR(RawCategory);
-		InFragmentItem->Category = CategorySty;
-		//ItemActor->Tags.Add(FName(CategorySty));
+		if (ii < InModel->categories()->size())
+		{
+			const auto* category = InModel->categories()->Get(ItemIndex);
+			if (category)  // Null check for category
+			{
+				const char* RawCategory = category->c_str();
+				FString CategorySty = UTF8_TO_TCHAR(RawCategory);
+				InFragmentItem->Category = CategorySty;
+			}
+		}
 
 		// Guids
-		const auto* item_guid = InModel->guids()->Get(ItemIndex);
-		const char* RawGuid = item_guid->c_str();
-		FString GuidStr = UTF8_TO_TCHAR(RawGuid);
-		InFragmentItem->Guid = GuidStr;
+		if (ii < InModel->guids()->size())
+		{
+			const auto* item_guid = InModel->guids()->Get(ItemIndex);
+			if (item_guid)  
+			{
+				const char* RawGuid = item_guid->c_str();
+				FString GuidStr = UTF8_TO_TCHAR(RawGuid);
+				InFragmentItem->Guid = GuidStr;
+			}
+		}
 	}
 }
 
@@ -381,6 +396,26 @@ TArray<int32> UFragmentsImporter::GetElementsByCategory(const FString& InCategor
 		}
 	}
 	return LocalIds;
+}
+
+void UFragmentsImporter::UnloadFragment(const FString& ModelGuid)
+{
+	if (FFragmentLookup* Lookup = ModelFragmentsMap.Find(ModelGuid))
+	{
+		for (TPair<int32, AFragment*> Obj : Lookup->Fragments)
+		{
+			Obj.Value->Destroy();
+		}
+		ModelFragmentsMap.Remove(ModelGuid);
+	}
+
+	if (UFragmentModelWrapper** WrapperPtr = FragmentModels.Find(ModelGuid))
+	{
+		UFragmentModelWrapper* Wrapper = *WrapperPtr;
+
+		Wrapper = nullptr;
+		FragmentModels.Remove(ModelGuid);
+	}
 }
 
 void UFragmentsImporter::CollectPropertiesRecursive(
