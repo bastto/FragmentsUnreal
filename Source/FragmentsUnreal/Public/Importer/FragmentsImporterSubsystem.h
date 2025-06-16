@@ -16,8 +16,25 @@ class FRAGMENTSUNREAL_API UFragmentsImporterSubsystem : public UGameInstanceSubs
 
 public:
 
+	UFUNCTION(BlueprintCallable)
 	FString LoadFragment(const FString& FragPath);
+	
+	UFUNCTION(BlueprintCallable)
 	void UnloadFragment(const FString& ModelGuid);
+
+	UFUNCTION(BlueprintCallable)
+	FString ProcessFragment(AActor* OwnerActor, const FString& FragPath, TArray<class AFragment*>& OutFragments, bool bSaveMeshes);
+
+
+	UFUNCTION(BlueprintCallable)
+	void ProcessLoadedFragment(const FString& InModelGuid, AActor* InOwnerRef, bool bInSaveMesh);
+
+	FORCEINLINE const TMap<FString, class UFragmentModelWrapper*>& GetFragmentModels() const
+	{
+		return FragmentModels;
+	}
+
+protected:
 
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;

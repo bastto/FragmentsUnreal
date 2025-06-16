@@ -36,6 +36,11 @@ public:
 	TArray<int32> GetElementsByCategory(const FString& InCategory, const FString& ModelGuid);
 	void UnloadFragment(const FString& ModelGuid);
 
+	FORCEINLINE const TMap<FString, class UFragmentModelWrapper*>& GetFragmentModels() const
+	{
+		return FragmentModels;
+	}
+
 private:
 
 	void CollectPropertiesRecursive(const Model* InModel, int32 StartLocalId, TSet<int32>& Visited, TArray<FItemAttribute>& OutAttributes);

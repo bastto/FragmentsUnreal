@@ -34,6 +34,8 @@ FString UFragmentsImporter::Process(AActor* OwnerA, const FString& FragPath, TAr
 {
 	SetOwnerRef(OwnerA);
 	FString ModelGuidStr = LoadFragment(FragPath);
+
+	if (ModelGuidStr.IsEmpty())	return FString();
 	
 	UFragmentModelWrapper* Wrapper = *FragmentModels.Find(ModelGuidStr);
 	const Model* ModelRef = Wrapper->GetParsedModel();
