@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
+#include "Utils/FragmentsUtils.h"
 #include "FragmentsImporterSubsystem.generated.h"
 
 /**
@@ -25,9 +26,14 @@ public:
 	UFUNCTION(BlueprintCallable)
 	FString ProcessFragment(AActor* OwnerActor, const FString& FragPath, TArray<class AFragment*>& OutFragments, bool bSaveMeshes);
 
-
 	UFUNCTION(BlueprintCallable)
 	void ProcessLoadedFragment(const FString& InModelGuid, AActor* InOwnerRef, bool bInSaveMesh);
+
+	UFUNCTION(BlueprintCallable)
+	TArray<int32> GetElementsByCategory(const FString& InCategory, const FString& ModelGuid);
+
+	FFragmentItem* GetFragmentItemByLocalId(int32 InLocalId, const FString& InModelGuid);
+	void GetItemData(FFragmentItem* InFragmentItem);
 
 	FORCEINLINE const TMap<FString, class UFragmentModelWrapper*>& GetFragmentModels() const
 	{

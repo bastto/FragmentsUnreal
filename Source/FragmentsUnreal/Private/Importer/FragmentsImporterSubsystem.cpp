@@ -46,6 +46,25 @@ void UFragmentsImporterSubsystem::ProcessLoadedFragment(const FString& InModelGu
     Importer->ProcessLoadedFragment(InModelGuid, InOwnerRef, bInSaveMesh);
 }
 
+TArray<int32> UFragmentsImporterSubsystem::GetElementsByCategory(const FString& InCategory, const FString& ModelGuid)
+{
+    check(Importer);
+
+    return Importer->GetElementsByCategory(InCategory, ModelGuid);
+}
+
+FFragmentItem* UFragmentsImporterSubsystem::GetFragmentItemByLocalId(int32 InLocalId, const FString& InModelGuid)
+{
+    check(Importer);
+    return Importer->GetFragmentItemByLocalId(InLocalId, InModelGuid);
+}
+
+void UFragmentsImporterSubsystem::GetItemData(FFragmentItem* InFragmentItem)
+{
+    check(Importer);
+    Importer->GetItemData(InFragmentItem);
+}
+
 void UFragmentsImporterSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
