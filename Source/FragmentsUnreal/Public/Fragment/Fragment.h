@@ -47,7 +47,7 @@ public:
 	void SetAttributes(TArray<struct FItemAttribute> InAttributes) { Attributes = InAttributes; }
 
 	UFUNCTION(BlueprintCallable, Category = "Fragments")
-	TArray<struct FItemAttribute> GetAttributes() { return Attributes; }
+	TArray<struct FItemAttribute> GetAttributes();
 	
 	void SetChildren(TArray<AFragment*> InChildren) { FragmentChildren = InChildren; }
 	

@@ -2,6 +2,7 @@
 
 
 #include "Fragment/Fragment.h"
+#include <Importer/FragmentsImporterSubsystem.h>
 
 
 // Sets default values
@@ -24,6 +25,24 @@ void AFragment::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+}
+
+TArray<struct FItemAttribute> AFragment::GetAttributes()
+{
+	if (UWorld* W = GEngine->GetWorldFromContextObjectChecked(this))
+	{
+		if (auto* Sub = W->GetGameInstance()->GetSubsystem<UFragmentsImporterSubsystem>())
+		{
+			FFragmentItem* InItem = Sub->GetFragmentItemByLocalId(LocalId, ModelGuid);
+
+			if (!InItem->ModelGuid.IsEmpty())
+			{
+				Sub->GetItemData(InItem);
+				return InItem->Attributes;
+			}
+		}
+	}
+	return TArray<FItemAttribute>();
 }
 
 AFragment* AFragment::FindFragmentByLocalId(int32 InLocalId)
