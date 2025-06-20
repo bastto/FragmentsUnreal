@@ -39,8 +39,8 @@ git submodule add https://github.com/bastto/FragmentsUnreal.git
 ## 🛠 Usage - (Blueprints)
 
 1. Prepare a model in Fragment 2.0 format
-2. Create an actor and add the AFragmentsComponent ActorComponent class
-3. From the AFragmentsComponent call the Process function.
+2. From actor or UI Get the FragmentsImporterSubsystem
+3. From the FragmentsImporterSubsystem call the function ProcessFragment
 4. The plugin will generate actors, meshes, and materials in-scene
 5. Hierarchies, transforms, and metadata will be applied based on the input
 
@@ -50,7 +50,7 @@ git submodule add https://github.com/bastto/FragmentsUnreal.git
 
 1. Prepare a model in Fragment 2.0 format
 2. Add FragmentsUnreal as dependency in your Module
-3. Using the UFragmentsImporter class call the Process function.
+3. Using the UFragmentsImporterSubsystem class call the ProcessFragment function.
 4. The plugin will generate actors, meshes, and materials in-scene
 5. Hierarchies, transforms, and metadata will be applied based on the input
 
