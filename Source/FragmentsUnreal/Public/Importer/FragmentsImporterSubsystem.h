@@ -32,6 +32,9 @@ public:
 	UFUNCTION(BlueprintCallable)
 	TArray<int32> GetElementsByCategory(const FString& InCategory, const FString& ModelGuid);
 
+	UFUNCTION(BlueprintCallable)
+	AFragment* GetItemByLocalId(int32 InLocalId, const FString& InModelGuid);
+
 	FFragmentItem* GetFragmentItemByLocalId(int32 InLocalId, const FString& InModelGuid);
 	void GetItemData(FFragmentItem* InFragmentItem);
 
