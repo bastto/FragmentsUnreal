@@ -53,6 +53,13 @@ TArray<int32> UFragmentsImporterSubsystem::GetElementsByCategory(const FString& 
     return Importer->GetElementsByCategory(InCategory, ModelGuid);
 }
 
+AFragment* UFragmentsImporterSubsystem::GetItemByLocalId(int32 InLocalId, const FString& InModelGuid)
+{
+    check (Importer)
+
+    return Importer->GetItemByLocalId(InLocalId, InModelGuid);
+}
+
 FFragmentItem* UFragmentsImporterSubsystem::GetFragmentItemByLocalId(int32 InLocalId, const FString& InModelGuid)
 {
     check(Importer);
