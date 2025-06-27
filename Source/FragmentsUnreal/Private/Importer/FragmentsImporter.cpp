@@ -367,6 +367,30 @@ void UFragmentsImporter::ProcessLoadedFragment(const FString& InModelGuid, AActo
 	}
 }
 
+void UFragmentsImporter::ProcessLoadedFragmentItem(int32 InLocalId, const FString& InModelGuid, AActor* InOwnerRef, bool bInSaveMesh)
+{
+	FFragmentItem* Item = GetFragmentItemByLocalId(InLocalId, InModelGuid);
+
+	if (!InOwnerRef) return;
+
+	SetOwnerRef(InOwnerRef);
+
+	UFragmentModelWrapper* Wrapper = *FragmentModels.Find(InModelGuid);
+	const Model* ModelRef = Wrapper->GetParsedModel();
+
+	BaseGlassMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/FragmentsUnreal/Materials/M_BaseFragmentGlassMaterial.M_BaseFragmentGlassMaterial"));
+	BaseMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/FragmentsUnreal/Materials/M_BaseFragmentMaterial.M_BaseFragmentMaterial"));
+
+	FDateTime StartTime = FDateTime::Now();
+	SpawnFragmentModel(*Item, OwnerRef, ModelRef->meshes(), bInSaveMesh);
+	UE_LOG(LogFragments, Warning, TEXT("Loaded model in [%s]s -> %s"), *(FDateTime::Now() - StartTime).ToString(), *InModelGuid);
+	if (PackagesToSave.Num() > 0)
+	{
+		DeferredSaveManager.AddPackagesToSave(PackagesToSave);
+		PackagesToSave.Empty();
+	}
+}
+
 TArray<int32> UFragmentsImporter::GetElementsByCategory(const FString& InCategory, const FString& ModelGuid)
 {
 	TArray<int32> LocalIds;

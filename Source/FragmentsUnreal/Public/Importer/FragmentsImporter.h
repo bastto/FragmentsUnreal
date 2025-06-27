@@ -33,6 +33,7 @@ public:
 	FFragmentItem* GetFragmentItemByLocalId(int32 LocalId, const FString& InModelGuid);
 	FString LoadFragment(const FString& FragPath);
 	void ProcessLoadedFragment(const FString& ModelGuid, AActor* InOwnerRef, bool bInSaveMesh);
+	void ProcessLoadedFragmentItem(int32 InLocalId, const FString& InModelGuid, AActor* InOwnerRef, bool bInSaveMesh);
 	TArray<int32> GetElementsByCategory(const FString& InCategory, const FString& ModelGuid);
 	void UnloadFragment(const FString& ModelGuid);
 

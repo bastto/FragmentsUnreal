@@ -30,6 +30,9 @@ public:
 	void ProcessLoadedFragment(const FString& InModelGuid, AActor* InOwnerRef, bool bInSaveMesh);
 
 	UFUNCTION(BlueprintCallable)
+	void ProcessLoadedFragmentItem(int32 InLocalId, const FString& InModelGuid, AActor* InOwnerRef, bool bInSaveMesh);
+
+	UFUNCTION(BlueprintCallable)
 	TArray<int32> GetElementsByCategory(const FString& InCategory, const FString& ModelGuid);
 
 	UFUNCTION(BlueprintCallable)
