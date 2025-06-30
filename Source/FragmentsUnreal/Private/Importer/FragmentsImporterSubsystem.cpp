@@ -79,6 +79,12 @@ void UFragmentsImporterSubsystem::GetItemData(FFragmentItem* InFragmentItem)
     Importer->GetItemData(InFragmentItem);
 }
 
+AFragment* UFragmentsImporterSubsystem::GetModelFragment(const FString& InModelGuid)
+{
+    check(Importer);
+    return Importer->GetModelFragment(InModelGuid);
+}
+
 void UFragmentsImporterSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);

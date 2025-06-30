@@ -26,6 +26,9 @@ private:
 
 	FFragmentItem ModelItem;
 
+	UPROPERTY()
+	class AFragment* SpawnedFragment;
+
 
 public:
 	void LoadModel(const TArray<uint8>& InBuffer)
@@ -38,5 +41,7 @@ public:
 
 	void SetModelItem(FFragmentItem InModelItem) { ModelItem = InModelItem; }
 	FFragmentItem GetModelItem() { return ModelItem; }
+	void SetSpawnedFragment(class AFragment* InSpawnedFragment) { SpawnedFragment = InSpawnedFragment; }
+	class AFragment* GetSpawnedFragment() { return SpawnedFragment; }
 
 };

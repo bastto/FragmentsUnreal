@@ -20,6 +20,9 @@
 #include "Importer/FragmentModelWrapper.h"
 #include "UObject/SavePackage.h"
 #include "Misc/ScopedSlowTask.h"
+#include "UDynamicMesh.h"
+#include "DynamicMesh/DynamicMesh3.h"
+#include "Materials/MaterialInterface.h"
 
 
 
@@ -382,7 +385,7 @@ void UFragmentsImporter::ProcessLoadedFragmentItem(int32 InLocalId, const FStrin
 	BaseMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/FragmentsUnreal/Materials/M_BaseFragmentMaterial.M_BaseFragmentMaterial"));
 
 	FDateTime StartTime = FDateTime::Now();
-	SpawnFragmentModel(*Item, OwnerRef, ModelRef->meshes(), bInSaveMesh);
+	Wrapper->SetSpawnedFragment(SpawnFragmentModel(*Item, OwnerRef, ModelRef->meshes(), bInSaveMesh));
 	UE_LOG(LogFragments, Warning, TEXT("Loaded model in [%s]s -> %s"), *(FDateTime::Now() - StartTime).ToString(), *InModelGuid);
 	if (PackagesToSave.Num() > 0)
 	{
@@ -442,6 +445,16 @@ void UFragmentsImporter::UnloadFragment(const FString& ModelGuid)
 		Wrapper = nullptr;
 		FragmentModels.Remove(ModelGuid);
 	}
+}
+
+AFragment* UFragmentsImporter::GetModelFragment(const FString& ModelGuid)
+{
+	if (FragmentModels.Contains(ModelGuid))
+	{
+		UFragmentModelWrapper* Wrapper = *FragmentModels.Find(ModelGuid);
+		return Wrapper->GetSpawnedFragment();
+	}
+	return nullptr;
 }
 
 void UFragmentsImporter::CollectPropertiesRecursive(
@@ -701,9 +714,9 @@ void UFragmentsImporter::SpawnFragmentModel(AFragment* InFragmentModel, AActor* 
 	}
 }
 
-void UFragmentsImporter::SpawnFragmentModel(FFragmentItem InFragmentItem, AActor* InParent, const Meshes* MeshesRef, bool bSaveMeshes)
+AFragment* UFragmentsImporter::SpawnFragmentModel(FFragmentItem InFragmentItem, AActor* InParent, const Meshes* MeshesRef, bool bSaveMeshes)
 {
-	if (!InParent) return;
+	if (!InParent) return nullptr;
 
 	// Create AFragment
 
@@ -827,6 +840,8 @@ void UFragmentsImporter::SpawnFragmentModel(FFragmentItem InFragmentItem, AActor
 	{
 		SpawnFragmentModel(*Child, FragmentModel, MeshesRef, bSaveMeshes);
 	}
+
+	return FragmentModel;
 }
 
 UStaticMesh* UFragmentsImporter::CreateStaticMeshFromShell(const Shell* ShellRef, const Material* RefMaterial, const FString& AssetName, UObject* OuterRef)
@@ -1081,6 +1096,21 @@ UStaticMesh* UFragmentsImporter::CreateStaticMeshFromCircleExtrusion(const Circl
 	//	UE_LOG(LogTemp, Warning, TEXT("Unexpected: Only %d LODs were created!"), StaticMesh->GetNumSourceModels());
 	//}
 	return StaticMesh;
+}
+
+UDynamicMesh* UFragmentsImporter::CreateDynamicMeshFromShell(const Shell* ShellRef, const Material* RefMaterial, const FString& AssetName, UObject* OuterRef)
+{
+	UDynamicMesh* DynamicMesh = NewObject<UDynamicMesh>(OuterRef, FName(*AssetName), RF_Public | RF_Standalone /*| RF_Transient*/);
+	if (!DynamicMesh) return nullptr;
+
+	FDynamicMesh3 Mesh = FDynamicMesh3();
+
+	TArray<FVector> Vertices;
+	TArray<int32> Indices;
+
+	//TO DO:
+
+	return nullptr;
 }
 
 FName UFragmentsImporter::AddMaterialToMesh(UStaticMesh*& CreatedMesh, const Material* RefMaterial)

@@ -41,10 +41,14 @@ public:
 	FFragmentItem* GetFragmentItemByLocalId(int32 InLocalId, const FString& InModelGuid);
 	void GetItemData(FFragmentItem* InFragmentItem);
 
+	UFUNCTION(BlueprintCallable)
+	AFragment* GetModelFragment(const FString& InModelGuid);
+
 	FORCEINLINE const TMap<FString, class UFragmentModelWrapper*>& GetFragmentModels() const
 	{
 		return FragmentModels;
 	}
+
 
 protected:
 

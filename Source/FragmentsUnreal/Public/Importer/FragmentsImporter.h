@@ -36,6 +36,7 @@ public:
 	void ProcessLoadedFragmentItem(int32 InLocalId, const FString& InModelGuid, AActor* InOwnerRef, bool bInSaveMesh);
 	TArray<int32> GetElementsByCategory(const FString& InCategory, const FString& ModelGuid);
 	void UnloadFragment(const FString& ModelGuid);
+	AFragment* GetModelFragment(const FString& ModelGuid);
 
 	FORCEINLINE const TMap<FString, class UFragmentModelWrapper*>& GetFragmentModels() const
 	{
@@ -47,7 +48,7 @@ private:
 	void CollectPropertiesRecursive(const Model* InModel, int32 StartLocalId, TSet<int32>& Visited, TArray<FItemAttribute>& OutAttributes);
 	void SpawnStaticMesh(UStaticMesh* StaticMesh, const Transform* LocalTransform, const Transform* GlobalTransform, AActor* Owner, FName OptionalTag = FName());
 	void SpawnFragmentModel(AFragment* InFragmentModel, AActor* InParent, const Meshes* MeshesRef, bool bSaveMeshes);
-	void SpawnFragmentModel(FFragmentItem InFragmentItem, AActor* InParent, const Meshes* MeshesRef, bool bSaveMeshes);
+	AFragment* SpawnFragmentModel(FFragmentItem InFragmentItem, AActor* InParent, const Meshes* MeshesRef, bool bSaveMeshes);
 	UStaticMesh* CreateStaticMeshFromShell(
 		const Shell* ShellRef,
 		const Material* RefMaterial,
@@ -56,6 +57,12 @@ private:
 	);
 	UStaticMesh* CreateStaticMeshFromCircleExtrusion(
 		const CircleExtrusion* CircleExtrusion,
+		const Material* RefMaterial,
+		const FString& AssetName,
+		UObject* OuterRef
+	);
+	class UDynamicMesh* CreateDynamicMeshFromShell(
+		const Shell* ShellRef,
 		const Material* RefMaterial,
 		const FString& AssetName,
 		UObject* OuterRef
