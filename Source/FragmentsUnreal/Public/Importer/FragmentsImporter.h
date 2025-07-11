@@ -7,6 +7,7 @@
 #include "Index/index_generated.h"
 #include "Utils/FragmentsUtils.h"
 #include "Importer/DeferredPackageSaveManager.h"
+#include "UDynamicMesh.h"
 
 #include "FragmentsImporter.generated.h"
 
@@ -61,7 +62,7 @@ private:
 		const FString& AssetName,
 		UObject* OuterRef
 	);
-	class UDynamicMesh* CreateDynamicMeshFromShell(
+	FDynamicMesh3 CreateDynamicMeshFromShell(
 		const Shell* ShellRef,
 		const Material* RefMaterial,
 		const FString& AssetName,

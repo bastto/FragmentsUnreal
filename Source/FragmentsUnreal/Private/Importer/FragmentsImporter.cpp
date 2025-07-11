@@ -23,6 +23,8 @@
 #include "UDynamicMesh.h"
 #include "DynamicMesh/DynamicMesh3.h"
 #include "Materials/MaterialInterface.h"
+#include "DynamicMesh/MeshNormals.h"
+#include "Components/DynamicMeshComponent.h"
 
 
 
@@ -762,6 +764,7 @@ AFragment* UFragmentsImporter::SpawnFragmentModel(FFragmentItem InFragmentItem, 
 			FTransform LocalTransform = UFragmentsUtils::MakeTransform(local_transform);
 
 			UStaticMesh* Mesh = nullptr;
+			//FDynamicMesh3 DynamicMesh;
 			//FString MeshName = FString::Printf(TEXT("sample_%d_%d"), InFragmentModel->GetLocalId(), i);
 			if (MeshCache.Contains(SamplePath))
 			{
@@ -783,6 +786,7 @@ AFragment* UFragmentsImporter::SpawnFragmentModel(FFragmentItem InFragmentItem, 
 				{
 					const auto* shell = MeshesRef->shells()->Get(representation->id());
 					Mesh = CreateStaticMeshFromShell(shell, material, *MeshName, MeshPackage);
+					//DynamicMesh = CreateDynamicMeshFromShell(shell, material, *MeshName, MeshPackage);
 
 				}
 				else if (representation->representation_class() == RepresentationClass_CIRCLE_EXTRUSION)
@@ -827,6 +831,16 @@ AFragment* UFragmentsImporter::SpawnFragmentModel(FFragmentItem InFragmentItem, 
 				MeshComp->RegisterComponent();
 				FragmentModel->AddInstanceComponent(MeshComp);
 			}
+
+			//if (DynamicMesh.CheckValidity())
+			//{
+			//	UDynamicMeshComponent* DynamicMeshComponent = NewObject<UDynamicMeshComponent>(FragmentModel);
+			//	DynamicMeshComponent->SetMesh(MoveTemp(DynamicMesh));
+			//	DynamicMeshComponent->SetRelativeTransform(LocalTransform); // local to parent
+			//	DynamicMeshComponent->AttachToComponent(RootSceneComponent, FAttachmentTransformRules::KeepRelativeTransform);
+			//	DynamicMeshComponent->RegisterComponent();
+			//	FragmentModel->AddInstanceComponent(DynamicMeshComponent);
+			//}
 		}
 	}
 
@@ -1098,7 +1112,7 @@ UStaticMesh* UFragmentsImporter::CreateStaticMeshFromCircleExtrusion(const Circl
 	return StaticMesh;
 }
 
-UDynamicMesh* UFragmentsImporter::CreateDynamicMeshFromShell(const Shell* ShellRef, const Material* RefMaterial, const FString& AssetName, UObject* OuterRef)
+FDynamicMesh3 UFragmentsImporter::CreateDynamicMeshFromShell(const Shell* ShellRef, const Material* RefMaterial, const FString& AssetName, UObject* OuterRef)
 {
 	UDynamicMesh* DynamicMesh = NewObject<UDynamicMesh>(OuterRef, FName(*AssetName), RF_Public | RF_Standalone /*| RF_Transient*/);
 	if (!DynamicMesh) return nullptr;
@@ -1108,9 +1122,127 @@ UDynamicMesh* UFragmentsImporter::CreateDynamicMeshFromShell(const Shell* ShellR
 	TArray<FVector> Vertices;
 	TArray<int32> Indices;
 
-	//TO DO:
+	const auto* Points = ShellRef->points();
+	Vertices.Reserve(Points->size());
+	for (flatbuffers::uoffset_t i = 0; i < Points->size(); i++)
+	{
+		const auto& Point = *Points->Get(i);
+		FVector Vertex = FVector(Point.x() * 100, Point.z() * 100, Point.y() * 100);
+		Vertices.Add(Vertex);
+	}
 
-	return nullptr;
+	for (const FVector& Vertex : Vertices)
+	{
+		Mesh.AppendVertex(Vertex);
+	}
+
+	// Map the holes and identify the profiles that has holes
+	const auto* Holes = ShellRef->holes();
+	TMap<int32, TArray<TArray<int32>>> ProfileHolesIdx;
+	for (flatbuffers::uoffset_t j = 0; j < Holes->size(); j++)
+	{
+		const auto* Hole = Holes->Get(j);
+		const auto* HoleIndices = Hole->indices();
+		const auto Profile_id = Hole->profile_id();
+		TArray<int32> HoleIdx;
+
+		for (flatbuffers::uoffset_t k = 0; k < HoleIndices->size(); k++)
+		{
+			HoleIdx.Add(HoleIndices->Get(k));
+		}
+
+		if (ProfileHolesIdx.Contains(Profile_id))
+		{
+			ProfileHolesIdx[Profile_id].Add(HoleIdx);
+		}
+		else
+		{
+			TArray<TArray<int32>> HolesForProfile;
+			HolesForProfile.Add(HoleIdx);
+			ProfileHolesIdx.Add(Profile_id, HolesForProfile);
+		}
+	}
+	// Create Faces (triangles)
+	const auto* Profiles = ShellRef->profiles();
+	TMap<int32, FPolygonID> PolygonMap;
+
+	for (flatbuffers::uoffset_t i = 0; i < Profiles->size(); i++)
+	{
+		const ShellProfile* Profile = Profiles->Get(i);
+		const auto* IndicesFb = Profile->indices();
+
+		if (!ProfileHolesIdx.Contains(i))
+		{
+			for (flatbuffers::uoffset_t j = 0; j < IndicesFb->size(); j++)
+			{
+				int a = IndicesFb->Get(0);
+				int b = IndicesFb->Get(j);
+				int c = IndicesFb->Get(j + 1);
+				Mesh.AppendTriangle(a, b, c);
+			}
+		}
+		// Process profile with holes to create new polygon that fully represent the substraction of holes in profile
+		else
+		{
+			TArray<int32> ProfileIdx;
+			for (flatbuffers::uoffset_t j = 0; j < IndicesFb->size(); j++)
+			{
+				ProfileIdx.Add(IndicesFb->Get(j));
+			}
+
+			if (IndicesFb->size() < 3)
+			{
+				UE_LOG(LogFragments, Error, TEXT("Profile %d skipped: fewer than 3 points"), i);
+				continue;
+			}
+
+			TArray<FVector> ProfilePoints;
+			TArray<int32> ProfilePointsIndex;
+			for (flatbuffers::uoffset_t j = 0; j < IndicesFb->size(); j++)
+			{
+				const auto Indice = IndicesFb->Get(j);
+				ProfilePointsIndex.Add(Indice);
+				const auto* Point = Points->Get(Indice);
+				FVector Vector = FVector(Point->x() * 100, Point->y() * 100, Point->z() * 100);
+				ProfilePoints.Add(Vector);
+			}
+
+			TArray<TArray<FVector>> ProfileHolesPoints;
+
+			/*UE_LOG(LogTemp, Log, TEXT("Profile %d has %d points and %d holes"),
+				i, Indices->size(), ProfileHolesIdx.Contains(i) ? ProfileHolesIdx[i].Num() : 0);*/
+
+			TArray<int32> OutIndices;
+			TArray<FVector> OutVertices;
+			if (!TriangulatePolygonWithHoles(Vertices, ProfilePointsIndex, ProfileHolesIdx[i], OutVertices, OutIndices))
+			{
+				UE_LOG(LogFragments, Error, TEXT("Profile %d skipped: Triangulation failed"), i);
+				continue;
+			}
+
+			TArray<int> NewVtxIDs;
+			NewVtxIDs.SetNum(OutVertices.Num());
+			for (int v = 0; v < OutVertices.Num(); v++)
+			{
+				NewVtxIDs[v] = Mesh.AppendVertex(OutVertices[v]);
+			}
+
+			// append triangles
+			for (int t = 0; t < OutIndices.Num(); t += 3)
+			{
+				int i0 = OutIndices[t + 0];
+				int i1 = OutIndices[t + 1];
+				int i2 = OutIndices[t + 2];
+				Mesh.AppendTriangle(
+					NewVtxIDs[i0],
+					NewVtxIDs[i1],
+					NewVtxIDs[i2]
+				);
+			}
+
+		}
+	}
+	return Mesh;
 }
 
 FName UFragmentsImporter::AddMaterialToMesh(UStaticMesh*& CreatedMesh, const Material* RefMaterial)
