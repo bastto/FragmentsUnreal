@@ -7,6 +7,7 @@
 #include "Index/index_generated.h"
 #include "Utils/FragmentsUtils.h"
 #include "Importer/DeferredPackageSaveManager.h"
+#include "UDynamicMesh.h"
 
 #include "FragmentsImporter.generated.h"
 
@@ -24,7 +25,7 @@ public:
 
 	UFragmentsImporter();
 
-	FString Process(AActor* OwnerA, const FString& FragPath, TArray<AFragment*>& OutFragments, bool bSaveMeshes = true);
+	FString Process(AActor* OwnerA, const FString& FragPath, TArray<AFragment*>& OutFragments, bool bSaveMeshes = true, bool bUseDynamicMesh = false);
 	void SetOwnerRef(AActor* NewOwnerRef) { OwnerRef = NewOwnerRef; }
 	void GetItemData(AFragment*& InFragment);
 	void GetItemData(FFragmentItem* InFragmentItem);
@@ -32,9 +33,11 @@ public:
 	AFragment* GetItemByLocalId(int32 LocalId, const FString& ModelGuid);
 	FFragmentItem* GetFragmentItemByLocalId(int32 LocalId, const FString& InModelGuid);
 	FString LoadFragment(const FString& FragPath);
-	void ProcessLoadedFragment(const FString& ModelGuid, AActor* InOwnerRef, bool bInSaveMesh);
+	void ProcessLoadedFragment(const FString& ModelGuid, AActor* InOwnerRef, bool bInSaveMesh, bool bUseDynamicMesh);
+	void ProcessLoadedFragmentItem(int32 InLocalId, const FString& InModelGuid, AActor* InOwnerRef, bool bInSaveMesh, bool bUseDynamicMesh);
 	TArray<int32> GetElementsByCategory(const FString& InCategory, const FString& ModelGuid);
 	void UnloadFragment(const FString& ModelGuid);
+	AFragment* GetModelFragment(const FString& ModelGuid);
 
 	FORCEINLINE const TMap<FString, class UFragmentModelWrapper*>& GetFragmentModels() const
 	{
@@ -46,7 +49,7 @@ private:
 	void CollectPropertiesRecursive(const Model* InModel, int32 StartLocalId, TSet<int32>& Visited, TArray<FItemAttribute>& OutAttributes);
 	void SpawnStaticMesh(UStaticMesh* StaticMesh, const Transform* LocalTransform, const Transform* GlobalTransform, AActor* Owner, FName OptionalTag = FName());
 	void SpawnFragmentModel(AFragment* InFragmentModel, AActor* InParent, const Meshes* MeshesRef, bool bSaveMeshes);
-	void SpawnFragmentModel(FFragmentItem InFragmentItem, AActor* InParent, const Meshes* MeshesRef, bool bSaveMeshes);
+	AFragment* SpawnFragmentModel(FFragmentItem InFragmentItem, AActor* InParent, const Meshes* MeshesRef, bool bSaveMeshes, class UFragmentModelWrapper* InWrapperRef, bool bUseDynamicMesh);
 	UStaticMesh* CreateStaticMeshFromShell(
 		const Shell* ShellRef,
 		const Material* RefMaterial,
@@ -59,8 +62,21 @@ private:
 		const FString& AssetName,
 		UObject* OuterRef
 	);
+	FDynamicMesh3 CreateDynamicMeshFromShell(
+		const Shell* ShellRef,
+		const Material* RefMaterial,
+		const FString& AssetName,
+		UObject* OuterRef
+	);
+	FDynamicMesh3 CreateDynamicMeshFromCircleExtrusion(
+		const CircleExtrusion* CircleExtrusion,
+		const Material* RefMaterial,
+		const FString& AssetName,
+		UObject* OuterRef
+	);
 
 	FName AddMaterialToMesh(UStaticMesh*& CreatedMesh, const Material* RefMaterial);
+	void AddMaterialToDynamicMesh(class UDynamicMeshComponent* InDynComp, const Material* RefMaterial, UFragmentModelWrapper* InWrapperRef, int32 InMaterialIndex);
 
 	bool TriangulatePolygonWithHoles(const TArray<FVector>& Points,
 		const TArray<int32>& Profiles,
