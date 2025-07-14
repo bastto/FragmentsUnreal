@@ -28,29 +28,29 @@ void UFragmentsImporterSubsystem::UnloadFragment(const FString& ModelGuid)
     }
 }
 
-FString UFragmentsImporterSubsystem::ProcessFragment(AActor* OwnerActor, const FString& FragPath, TArray<class AFragment*>& OutFragments, bool bSaveMeshes)
+FString UFragmentsImporterSubsystem::ProcessFragment(AActor* OwnerActor, const FString& FragPath, TArray<class AFragment*>& OutFragments, bool bSaveMeshes, bool bUseDynamicMesh)
 {
     check(Importer);
 
-    FString ModelGuid = Importer->Process(OwnerActor, FragPath, OutFragments, bSaveMeshes);
+    FString ModelGuid = Importer->Process(OwnerActor, FragPath, OutFragments, bSaveMeshes, bUseDynamicMesh);
 
     FragmentModels = Importer->GetFragmentModels();
 
     return ModelGuid;
 }
 
-void UFragmentsImporterSubsystem::ProcessLoadedFragment(const FString& InModelGuid, AActor* InOwnerRef, bool bInSaveMesh)
+void UFragmentsImporterSubsystem::ProcessLoadedFragment(const FString& InModelGuid, AActor* InOwnerRef, bool bInSaveMesh, bool bUseDynamicMesh)
 {
     check(Importer);
 
-    Importer->ProcessLoadedFragment(InModelGuid, InOwnerRef, bInSaveMesh);
+    Importer->ProcessLoadedFragment(InModelGuid, InOwnerRef, bInSaveMesh, bUseDynamicMesh);
 }
 
-void UFragmentsImporterSubsystem::ProcessLoadedFragmentItem(int32 InLocalId, const FString& InModelGuid, AActor* InOwnerRef, bool bInSaveMesh)
+void UFragmentsImporterSubsystem::ProcessLoadedFragmentItem(int32 InLocalId, const FString& InModelGuid, AActor* InOwnerRef, bool bInSaveMesh, bool bUseDynamicMesh)
 {
     check(Importer);
 
-    return Importer->ProcessLoadedFragmentItem(InLocalId, InModelGuid, InOwnerRef, bInSaveMesh);
+    return Importer->ProcessLoadedFragmentItem(InLocalId, InModelGuid, InOwnerRef, bInSaveMesh, bUseDynamicMesh);
 }
 
 TArray<int32> UFragmentsImporterSubsystem::GetElementsByCategory(const FString& InCategory, const FString& ModelGuid)

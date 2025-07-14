@@ -24,13 +24,13 @@ public:
 	void UnloadFragment(const FString& ModelGuid);
 
 	UFUNCTION(BlueprintCallable)
-	FString ProcessFragment(AActor* OwnerActor, const FString& FragPath, TArray<class AFragment*>& OutFragments, bool bSaveMeshes);
+	FString ProcessFragment(AActor* OwnerActor, const FString& FragPath, TArray<class AFragment*>& OutFragments, bool bSaveMeshes, bool bUseDynamicMesh);
 
 	UFUNCTION(BlueprintCallable)
-	void ProcessLoadedFragment(const FString& InModelGuid, AActor* InOwnerRef, bool bInSaveMesh);
+	void ProcessLoadedFragment(const FString& InModelGuid, AActor* InOwnerRef, bool bInSaveMesh, bool bUseDynamicMesh);
 
 	UFUNCTION(BlueprintCallable)
-	void ProcessLoadedFragmentItem(int32 InLocalId, const FString& InModelGuid, AActor* InOwnerRef, bool bInSaveMesh);
+	void ProcessLoadedFragmentItem(int32 InLocalId, const FString& InModelGuid, AActor* InOwnerRef, bool bInSaveMesh, bool bUseDynamicMesh);
 
 	UFUNCTION(BlueprintCallable)
 	TArray<int32> GetElementsByCategory(const FString& InCategory, const FString& ModelGuid);

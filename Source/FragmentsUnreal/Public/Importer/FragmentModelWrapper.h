@@ -29,6 +29,9 @@ private:
 	UPROPERTY()
 	class AFragment* SpawnedFragment;
 
+	UPROPERTY()
+	TMap<int32, class UMaterialInstanceDynamic*> MaterialsMap;
+
 
 public:
 	void LoadModel(const TArray<uint8>& InBuffer)
@@ -43,5 +46,6 @@ public:
 	FFragmentItem GetModelItem() { return ModelItem; }
 	void SetSpawnedFragment(class AFragment* InSpawnedFragment) { SpawnedFragment = InSpawnedFragment; }
 	class AFragment* GetSpawnedFragment() { return SpawnedFragment; }
+	TMap<int32, class UMaterialInstanceDynamic*> GetMaterialsMap() { return MaterialsMap; }
 
 };
