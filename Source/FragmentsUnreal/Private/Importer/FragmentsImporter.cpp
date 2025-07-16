@@ -790,6 +790,7 @@ AFragment* UFragmentsImporter::SpawnFragmentModel(FFragmentItem InFragmentItem, 
 				DynamicMeshComponent->RegisterComponent();
 				DynamicMeshComponent->SetComplexAsSimpleCollisionEnabled(true);
 				DynamicMeshComponent->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+				DynamicMeshComponent->SetCollisionResponseToAllChannels(ECollisionResponse::ECR_Block);
 				FragmentModel->AddInstanceComponent(DynamicMeshComponent);
 			}
 			else
