@@ -69,24 +69,27 @@ public:
 	FTransform GetGlobalTransform() const { return GlobalTransform; }
 	void SetData(FFragmentItem InFragmentItem);
 
+protected:
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Fragments|Attributes")
+	FString ModelGuid;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Fragments|Attributes")
+	int32 LocalId;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Fragments|Attributes")
+	FString Category;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Fragments|Attributes")
+	FString Guid;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Fragments|Attributes")
+	TArray<struct FItemAttribute> Attributes;
+
 private:
 
 	FFragmentItem Data;
 
-	UPROPERTY()
-	FString ModelGuid;
-
-	UPROPERTY()
-	int32 LocalId;
-
-	UPROPERTY()
-	FString Category;
-
-	UPROPERTY()
-	FString Guid;
-
-	UPROPERTY()
-	TArray<struct FItemAttribute> Attributes;
 	
 	UPROPERTY()
 	TArray<AFragment*> FragmentChildren;
