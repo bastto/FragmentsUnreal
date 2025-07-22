@@ -352,7 +352,7 @@ FString UFragmentsImporter::LoadFragment(const FString& FragPath)
 
 void UFragmentsImporter::ProcessLoadedFragment(const FString& InModelGuid, AActor* InOwnerRef, bool bInSaveMesh, bool bUseDynamicMesh)
 {
-	if (!InOwnerRef) return;
+	if (!InOwnerRef || !FragmentModels.Contains(InModelGuid)) return;
 
 	SetOwnerRef(InOwnerRef);
 
@@ -363,7 +363,7 @@ void UFragmentsImporter::ProcessLoadedFragment(const FString& InModelGuid, AActo
 	BaseMaterial = LoadObject<UMaterialInterface>(nullptr, TEXT("/FragmentsUnreal/Materials/M_BaseFragmentMaterial.M_BaseFragmentMaterial"));
 	
 	FDateTime StartTime = FDateTime::Now();
-	SpawnFragmentModel(Wrapper->GetModelItem(), OwnerRef, ModelRef->meshes(), bInSaveMesh, Wrapper, bUseDynamicMesh);
+	Wrapper->SetSpawnedFragment(SpawnFragmentModel(Wrapper->GetModelItem(), OwnerRef, ModelRef->meshes(), bInSaveMesh, Wrapper, bUseDynamicMesh));
 	UE_LOG(LogFragments, Warning, TEXT("Loaded model in [%s]s -> %s"), *(FDateTime::Now() - StartTime).ToString(), *InModelGuid);
 	if (PackagesToSave.Num() > 0)
 	{
