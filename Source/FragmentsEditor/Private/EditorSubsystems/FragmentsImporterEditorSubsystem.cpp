@@ -83,6 +83,12 @@ AFragment* UFragmentsImporterEditorSubsystem::GetModelFragment(const FString& In
     return Importer->GetModelFragment(InModelGuid);
 }
 
+FTransform UFragmentsImporterEditorSubsystem::GetBaseCoordinates()
+{
+    check(Importer);
+    return Importer->GetBaseCoordinates();
+}
+
 void UFragmentsImporterEditorSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);
