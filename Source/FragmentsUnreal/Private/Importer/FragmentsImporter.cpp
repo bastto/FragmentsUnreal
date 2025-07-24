@@ -270,9 +270,24 @@ FString UFragmentsImporter::LoadFragment(const FString& FragPath)
 	const auto* guid = ModelRef->guid();
 	const char* RawModelGuid = guid->c_str();
 	FString ModelGuidStr = UTF8_TO_TCHAR(RawModelGuid);
+	const auto* local_ids = ModelRef->local_ids();
+	const auto* _meshes = ModelRef->meshes();
+	
 
 	const auto* spatial_structure = ModelRef->spatial_structure();
-	FTransform RootTransform = FTransform::Identity;
+	FTransform RootTransform =  UFragmentsUtils::MakeTransform(_meshes->coordinates());
+	FVector RootOffset = FVector::ZeroVector;
+	if (!bBaseCoordinatesInitialized)
+	{
+		BaseCoordinates = RootTransform;
+		bBaseCoordinatesInitialized = true;
+	}
+	else
+	{
+		RootOffset = BaseCoordinates.GetLocation() - RootTransform.GetLocation();
+	}
+
+	//FTransform RootTransform =  FTransform::Identity;
 	FFragmentItem FragmentItem;
 	FragmentItem.Guid = ModelGuidStr;
 	FragmentItem.ModelGuid = ModelGuidStr;
@@ -282,8 +297,6 @@ FString UFragmentsImporter::LoadFragment(const FString& FragPath)
 	Wrapper->SetModelItem(FragmentItem);
 	FragmentModels.Add(ModelGuidStr, Wrapper);
 
-	const auto* local_ids = ModelRef->local_ids();
-	const auto* _meshes = ModelRef->meshes();
 
 	// Loop through samples and spawn meshes
 	if (_meshes)
@@ -325,6 +338,7 @@ FString UFragmentsImporter::LoadFragment(const FString& FragPath)
 
 			const auto* global_transform = global_transforms->Get(mesh);
 			FTransform GlobalTransform = UFragmentsUtils::MakeTransform(global_transform);
+			GlobalTransform.AddToTranslation(2*RootOffset);
 			FoundFragmentItem->GlobalTransform = GlobalTransform;
 
 			for (int32 i = 0; i < ItemSamples.Num(); i++)
@@ -732,9 +746,10 @@ AFragment* UFragmentsImporter::SpawnFragmentModel(FFragmentItem InFragmentItem, 
 	RootSceneComponent->SetMobility(EComponentMobility::Movable);
 
 	// Set Transform and Info
-	//FragmentModel->SetActorTransform(InFragmentItem.GlobalTransform);
+	FTransform RootTransform = UFragmentsUtils::MakeTransform(MeshesRef->coordinates());
+	FragmentModel->SetActorTransform(InFragmentItem.GlobalTransform);
 	FragmentModel->SetData(InFragmentItem);
-	FragmentModel->AttachToActor(InParent, FAttachmentTransformRules::KeepWorldTransform);
+	FragmentModel->AttachToActor(InParent, FAttachmentTransformRules::KeepRelativeTransform);
 
 #if WITH_EDITOR
 	if (!FragmentModel->GetCategory().IsEmpty())
@@ -749,7 +764,6 @@ AFragment* UFragmentsImporter::SpawnFragmentModel(FFragmentItem InFragmentItem, 
 		{
 			const FFragmentSample& Sample = Samples[i];
 
-			//FString PackagePath = FString::Printf(TEXT("/Game/Buildings/%s"), *InFragmentModel->GetModelGuid());
 			FString MeshName = FString::Printf(TEXT("%d_%d"), FragmentModel->GetLocalId(), i);
 			FString PackagePath = TEXT("/Game/Buildings") / FragmentModel->GetModelGuid() / MeshName;
 			const FString SamplePath = PackagePath + TEXT(".") + MeshName;
@@ -772,7 +786,6 @@ AFragment* UFragmentsImporter::SpawnFragmentModel(FFragmentItem InFragmentItem, 
 				if (representation->representation_class() == RepresentationClass::RepresentationClass_SHELL)
 				{
 					const auto* shell = MeshesRef->shells()->Get(representation->id());
-					//Mesh = CreateStaticMeshFromShell(shell, material, *MeshName, MeshPackage);
 					DynamicMesh = CreateDynamicMeshFromShell(shell, material, *MeshName, MeshPackage);
 
 				}
@@ -797,7 +810,6 @@ AFragment* UFragmentsImporter::SpawnFragmentModel(FFragmentItem InFragmentItem, 
 			{
 
 				UStaticMesh* Mesh = nullptr;
-				//FString MeshName = FString::Printf(TEXT("sample_%d_%d"), InFragmentModel->GetLocalId(), i);
 				if (MeshCache.Contains(SamplePath))
 				{
 					Mesh = MeshCache[SamplePath];
@@ -805,7 +817,6 @@ AFragment* UFragmentsImporter::SpawnFragmentModel(FFragmentItem InFragmentItem, 
 				else if (FPaths::FileExists(PackageFileName))
 				{
 					UPackage* ExistingPackage = LoadPackage(nullptr, *PackagePath, LOAD_None);
-					//UStaticMesh* Mesh = Cast<UStaticMesh>(StaticLoadObject(UStaticMesh::StaticClass(), nullptr, *MeshObjectPath));
 					if (ExistingPackage)
 					{
 						Mesh = FindObject<UStaticMesh>(ExistingPackage, *MeshName);
@@ -835,7 +846,6 @@ AFragment* UFragmentsImporter::SpawnFragmentModel(FFragmentItem InFragmentItem, 
 	
 							Mesh->Rename(*MeshName, MeshPackage);
 							Mesh->SetFlags(RF_Public | RF_Standalone);
-							//Mesh->Build();
 							MeshPackage->MarkPackageDirty();
 							FAssetRegistryModule::AssetCreated(Mesh);
 	
@@ -863,7 +873,7 @@ AFragment* UFragmentsImporter::SpawnFragmentModel(FFragmentItem InFragmentItem, 
 					FragmentModel->AddInstanceComponent(MeshComp);
 				}
 			}
-		}
+		} 
 	}
 
 	if (ModelFragmentsMap.Contains(InFragmentItem.ModelGuid))

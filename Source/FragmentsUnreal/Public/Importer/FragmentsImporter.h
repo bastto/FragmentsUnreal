@@ -117,6 +117,12 @@ private:
 	UPROPERTY()
 	TArray<UPackage*> PackagesToSave;
 
+	UPROPERTY()
+	bool bBaseCoordinatesInitialized = false;
+
+	UPROPERTY()
+	FTransform BaseCoordinates;
+
 	FDeferredPackageSaveManager DeferredSaveManager;
 
 public:
