@@ -38,6 +38,7 @@ public:
 	TArray<int32> GetElementsByCategory(const FString& InCategory, const FString& ModelGuid);
 	void UnloadFragment(const FString& ModelGuid);
 	AFragment* GetModelFragment(const FString& ModelGuid);
+	FTransform GetBaseCoordinates() { return BaseCoordinates; }
 
 	FORCEINLINE const TMap<FString, class UFragmentModelWrapper*>& GetFragmentModels() const
 	{

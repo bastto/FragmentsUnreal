@@ -44,6 +44,9 @@ public:
 	UFUNCTION(BlueprintCallable)
 	AFragment* GetModelFragment(const FString& InModelGuid);
 
+	UFUNCTION(BlueprintCallable)
+	FTransform GetBaseCoordinates();
+
 	FORCEINLINE const TMap<FString, class UFragmentModelWrapper*>& GetFragmentModels() const
 	{
 		return FragmentModels;
