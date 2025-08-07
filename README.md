@@ -36,26 +36,75 @@ git submodule add https://github.com/bastto/FragmentsUnreal.git
 
 ---
 
-## 🛠 Usage - (Blueprints)
+## 🛠 Usage Runtime - (Blueprints)
 
-1. Prepare a model in Fragment 2.0 format
-2. From actor or UI Get the FragmentsImporterSubsystem
-3. From the FragmentsImporterSubsystem call the function ProcessFragment
-4. The plugin will generate actors, meshes, and materials in-scene
-5. Hierarchies, transforms, and metadata will be applied based on the input
+## 🧩 Fragment Model Import Workflow
+
+### ✅ `ProcessFragment`
+
+Use `ProcessFragment` to **import and spawn** a Fragment model. The origin point (`0,0,0`) will be relative to the **owning actor's position**.
+
+* Set `SaveMeshes = true` to **save the generated geometry** for future reuse.
+* Set `UseDynamicMesh = true` to **generate a fast preview** using DynamicMesh.
+
+  > ⚠️ When using `DynamicMesh`, **`SaveMeshes` is ignored**.
+
+<img width="1801" height="994" alt="ProcessFragment Example" src="https://github.com/user-attachments/assets/1cf88373-1c2f-4f14-b11b-4215bfe33399" />
 
 ---
 
-## 🛠 Usage - (C++)
+### 📥 `LoadFragment`
+
+Use `LoadFragment` to **import and store** a Fragment model in memory for later use during the session.
+
+<img width="1815" height="995" alt="LoadFragment Example" src="https://github.com/user-attachments/assets/bd30b4a5-fba2-4e84-9ccc-a15ed541660b" />
+
+---
+
+### 🧠 `ProcessLoadedFragment`
+
+Call `ProcessLoadedFragment` to **spawn** a previously loaded Fragment model using its `ModelGuid`.
+
+* Can optionally enable `SaveMeshes` or `UseDynamicMesh` just like in `ProcessFragment`.
+
+<img width="1932" height="1059" alt="ProcessLoadedFragment Example" src="https://github.com/user-attachments/assets/e9ce9260-0970-4fa1-b1b7-23ef90bd0fe1" />
+
+---
+
+### 🧱 `SpawnItemsFromModel`
+
+Use this to spawn **individual items and their children** from a loaded model using:
+
+* `ModelGuid` – to identify the loaded model
+* `Element LocalId` – to specify the starting node
+
+Supports both `SaveMeshes` and `UseDynamicMesh`.
+
+<img width="1937" height="1061" alt="SpawnItemsFromModel Example" src="https://github.com/user-attachments/assets/31ea5c47-125a-4182-9a9d-50d0c4b9ce81" />
+
+
+
+---
+
+## 🛠 Usage Runtime - (C++)
 
 1. Prepare a model in Fragment 2.0 format
 2. Add FragmentsUnreal as dependency in your Module
-3. Using the UFragmentsImporterSubsystem class call the ProcessFragment function.
-4. The plugin will generate actors, meshes, and materials in-scene
-5. Hierarchies, transforms, and metadata will be applied based on the input
+3. Using the UFragmentsImporterSubsystem. [Runtime Subsystem](Source/FragmentsUnreal/Public/Importer)
+4. Same functions as in the blueprint example above.
+5. The plugin will generate actors, meshes, and materials in-scene
+6. Hierarchies, transforms, and metadata will be applied based on the input
 
 ---
+## 🛠 Usage FragmentsEditor 
+  > ⚠️ FragmentEditor, **is an `editor only` module**.
 
+## 🧩 Fragment Model Import Workflow
+
+1. Prepare a model in Fragment 2.0 format
+2. Add FragmentsUnreal as dependency in your Module
+3. Using the UFragmentsImporterEditorSubsystem. [Editor Subsystem](Source/FragmentsEditor/Public/EditorSubsystems)
+4. Same functions as in the blueprint example above.
 
 ## 📁 Repository Structure
 
@@ -67,6 +116,8 @@ FragmentUnreal/
 |   │   ├── Importer/                      # Fragments import logic
 |   │   ├── Index/                         # flatbuffers Fragment structure reference
 |   │   └── Utils/                         # Functions library
+│   ├── FragmentEditor/                    # Editor functionalitites
+|   │   └── EditorSubsystems/              # Editor import logic
 ├── ThirdParty/                            # ThirdParty dependencies
 │   ├── FlatBuffers/include/flatbufferss   # Flatbuffers structure
 │   ├── libtess2                           # libtess2 for mesh triangulation
