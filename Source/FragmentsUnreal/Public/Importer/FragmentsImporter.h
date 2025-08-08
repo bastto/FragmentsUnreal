@@ -55,13 +55,13 @@ private:
 		const Shell* ShellRef,
 		const Material* RefMaterial,
 		const FString& AssetName,
-		UObject* OuterRef
+		UObject* OuterRef, const FString& InModelGuid
 	);
 	UStaticMesh* CreateStaticMeshFromCircleExtrusion(
 		const CircleExtrusion* CircleExtrusion,
 		const Material* RefMaterial,
 		const FString& AssetName,
-		UObject* OuterRef
+		UObject* OuterRef, const FString& InModelGuid
 	);
 	FDynamicMesh3 CreateDynamicMeshFromShell(
 		const Shell* ShellRef,
@@ -76,7 +76,7 @@ private:
 		UObject* OuterRef
 	);
 
-	FName AddMaterialToMesh(UStaticMesh*& CreatedMesh, const Material* RefMaterial);
+	FName AddMaterialToMesh(UStaticMesh*& CreatedMesh, const Material* RefMaterial, const FString& InModelGuid);
 	void AddMaterialToDynamicMesh(class UDynamicMeshComponent* InDynComp, const Material* RefMaterial, UFragmentModelWrapper* InWrapperRef, int32 InMaterialIndex);
 
 	bool TriangulatePolygonWithHoles(const TArray<FVector>& Points,
@@ -85,7 +85,7 @@ private:
 		TArray<FVector>& OutVertices,
 		TArray<int32>& OutIndices);
 
-	void BuildFullCircleExtrusion(UStaticMeshDescription& StaticMeshDescription, const CircleExtrusion* CircleExtrusion, const Material* RefMaterial, UStaticMesh* StaticMesh);
+	void BuildFullCircleExtrusion(UStaticMeshDescription& StaticMeshDescription, const CircleExtrusion* CircleExtrusion, const Material* RefMaterial, UStaticMesh* StaticMesh, const FString& InModelGuid);
 
 	void BuildLineOnlyMesh(UStaticMeshDescription& StaticMeshDescription, const CircleExtrusion* CircleExtrusion);
 
@@ -116,10 +116,16 @@ private:
 	TMap<FString, UStaticMesh*> MeshCache;
 
 	UPROPERTY()
+	TMap<FString, UMaterialInstanceConstant*> MaterialsCache;
+
+	UPROPERTY()
 	TArray<UPackage*> PackagesToSave;
 
 	UPROPERTY()
 	bool bBaseCoordinatesInitialized = false;
+
+	UPROPERTY()
+	bool bSaveMaterials = false;
 
 	UPROPERTY()
 	FTransform BaseCoordinates;

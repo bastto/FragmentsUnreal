@@ -25,6 +25,7 @@
 #include "Materials/MaterialInterface.h"
 #include "DynamicMesh/MeshNormals.h"
 #include "Components/DynamicMeshComponent.h"
+#include "Materials/MaterialInstanceConstant.h"
 
 
 
@@ -675,13 +676,13 @@ void UFragmentsImporter::SpawnFragmentModel(AFragment* InFragmentModel, AActor* 
 				if (representation->representation_class() == RepresentationClass::RepresentationClass_SHELL)
 				{
 					const auto* shell = MeshesRef->shells()->Get(representation->id());
-					Mesh = CreateStaticMeshFromShell(shell, material, *MeshName, MeshPackage);
+					Mesh = CreateStaticMeshFromShell(shell, material, *MeshName, MeshPackage, InFragmentModel->GetModelGuid());
 
 				}
 				else if (representation->representation_class() == RepresentationClass_CIRCLE_EXTRUSION)
 				{
 					const auto* circleExtrusion = MeshesRef->circle_extrusions()->Get(representation->id());
-					Mesh = CreateStaticMeshFromCircleExtrusion(circleExtrusion, material, *MeshName, MeshPackage);
+					Mesh = CreateStaticMeshFromCircleExtrusion(circleExtrusion, material, *MeshName, MeshPackage, InFragmentModel->GetModelGuid());
 				}
 
 				if (Mesh)
@@ -733,7 +734,7 @@ void UFragmentsImporter::SpawnFragmentModel(AFragment* InFragmentModel, AActor* 
 AFragment* UFragmentsImporter::SpawnFragmentModel(FFragmentItem InFragmentItem, AActor* InParent, const Meshes* MeshesRef, bool bSaveMeshes, UFragmentModelWrapper* InWrapperRef, bool bUseDynamicMesh)
 {
 	if (!InParent) return nullptr;
-
+	bSaveMaterials = bSaveMeshes;
 	// Create AFragment
 
 	AFragment* FragmentModel = OwnerRef->GetWorld()->SpawnActor<AFragment>(
@@ -829,13 +830,13 @@ AFragment* UFragmentsImporter::SpawnFragmentModel(FFragmentItem InFragmentItem, 
 					if (representation->representation_class() == RepresentationClass::RepresentationClass_SHELL)
 					{
 						const auto* shell = MeshesRef->shells()->Get(representation->id());
-						Mesh = CreateStaticMeshFromShell(shell, material, *MeshName, MeshPackage);
+						Mesh = CreateStaticMeshFromShell(shell, material, *MeshName, MeshPackage, FragmentModel->GetModelGuid());
 
 					}
 					else if (representation->representation_class() == RepresentationClass_CIRCLE_EXTRUSION)
 					{
 						const auto* circleExtrusion = MeshesRef->circle_extrusions()->Get(representation->id());
-						Mesh = CreateStaticMeshFromCircleExtrusion(circleExtrusion, material, *MeshName, MeshPackage);
+						Mesh = CreateStaticMeshFromCircleExtrusion(circleExtrusion, material, *MeshName, MeshPackage, FragmentModel->GetModelGuid());
 					}
 
 					if (Mesh)
@@ -891,7 +892,7 @@ AFragment* UFragmentsImporter::SpawnFragmentModel(FFragmentItem InFragmentItem, 
 	return FragmentModel;
 }
 
-UStaticMesh* UFragmentsImporter::CreateStaticMeshFromShell(const Shell* ShellRef, const Material* RefMaterial, const FString& AssetName, UObject* OuterRef)
+UStaticMesh* UFragmentsImporter::CreateStaticMeshFromShell(const Shell* ShellRef, const Material* RefMaterial, const FString& AssetName, UObject* OuterRef, const FString& InModelGuid)
 {
 	// Create StaticMesh object
 	UStaticMesh* StaticMesh = NewObject<UStaticMesh>(OuterRef, FName(*AssetName), RF_Public | RF_Standalone /*| RF_Transient*/);
@@ -944,7 +945,7 @@ UStaticMesh* UFragmentsImporter::CreateStaticMeshFromShell(const Shell* ShellRef
 		//UE_LOG(LogTemp, Log, TEXT("\t\t\t\tpoint %d: x: %f, y:%f, z:%f"), i, P.x(), P.y(), P.z());
 	}
 
-	FName MaterialSlotName = AddMaterialToMesh(StaticMesh, RefMaterial);
+	FName MaterialSlotName = AddMaterialToMesh(StaticMesh, RefMaterial, InModelGuid);
 	const FPolygonGroupID PolygonGroupId = StaticMeshDescription->CreatePolygonGroup();
 	StaticMeshDescription->SetPolygonGroupMaterialSlotName(PolygonGroupId, MaterialSlotName);
 
@@ -1073,7 +1074,7 @@ UStaticMesh* UFragmentsImporter::CreateStaticMeshFromShell(const Shell* ShellRef
 	return StaticMesh;
 }
 
-UStaticMesh* UFragmentsImporter::CreateStaticMeshFromCircleExtrusion(const CircleExtrusion* CircleExtrusion, const Material* RefMaterial, const FString& AssetName, UObject* OuterRef)
+UStaticMesh* UFragmentsImporter::CreateStaticMeshFromCircleExtrusion(const CircleExtrusion* CircleExtrusion, const Material* RefMaterial, const FString& AssetName, UObject* OuterRef, const FString& InModelGuid)
 {
 	if (!CircleExtrusion || !CircleExtrusion->axes() || CircleExtrusion->axes()->size() == 0)
 		return nullptr;
@@ -1103,7 +1104,7 @@ UStaticMesh* UFragmentsImporter::CreateStaticMeshFromCircleExtrusion(const Circl
 
 	// LOD0 – Full circle extrusion
 	UStaticMeshDescription* LOD0Desc = StaticMesh->CreateStaticMeshDescription(OuterRef);
-	BuildFullCircleExtrusion(*LOD0Desc, CircleExtrusion, RefMaterial, StaticMesh);
+	BuildFullCircleExtrusion(*LOD0Desc, CircleExtrusion, RefMaterial, StaticMesh, InModelGuid);
 	MeshDescriptionPtrs.Add(&LOD0Desc->GetMeshDescription());
 
 	{ // To Do: Implementation of LOD for Static Mesh Created. Seaking for better Performance??
@@ -1505,7 +1506,7 @@ FDynamicMesh3 UFragmentsImporter::CreateDynamicMeshFromCircleExtrusion(const Cir
 	return Mesh;
 }
 
-FName UFragmentsImporter::AddMaterialToMesh(UStaticMesh*& CreatedMesh, const Material* RefMaterial)
+FName UFragmentsImporter::AddMaterialToMesh(UStaticMesh*& CreatedMesh, const Material* RefMaterial, const FString& InModelGuid)
 {
 	if (!RefMaterial || !CreatedMesh)return FName();
 
@@ -1532,6 +1533,59 @@ FName UFragmentsImporter::AddMaterialToMesh(UStaticMesh*& CreatedMesh, const Mat
 		return FName();
 	}
 
+#if WITH_EDITOR
+	FString MaterialName = FString::Printf(TEXT("mat_%d_%d_%d_%d"),
+		FMath::RoundToInt(R * 255),
+		FMath::RoundToInt(G * 255),
+		FMath::RoundToInt(B * 255),
+		FMath::RoundToInt(A * 255));
+	FString PackagePath = TEXT("/Game/Buildings") / InModelGuid / MaterialName;
+	FString UniquePackageName = FPackageName::ObjectPathToPackageName(PackagePath);
+	FString PackageFileName = FPackageName::LongPackageNameToFilename(UniquePackageName, FPackageName::GetAssetPackageExtension());
+	const FString SamplePath = PackagePath + TEXT(".") + MaterialName;
+	
+	UMaterialInstanceConstant* MaterialInstance = nullptr;
+	if (MaterialsCache.Contains(SamplePath))
+	{
+		MaterialInstance = MaterialsCache[SamplePath];
+	}
+	else if (FPaths::FileExists(PackageFileName))
+	{
+		UPackage* ExistingPackage = LoadPackage(nullptr, *PackagePath, LOAD_None);
+		if (ExistingPackage)
+		{
+			MaterialInstance = FindObject<UMaterialInstanceConstant>(ExistingPackage, *MaterialName);
+		}
+	}
+	else
+	{
+		UPackage* MaterialPackage = CreatePackage(*PackagePath);
+		MaterialInstance = NewObject<UMaterialInstanceConstant>(UMaterialInstanceConstant::StaticClass());
+		MaterialInstance->SetParentEditorOnly(Material);
+		MaterialInstance->SetVectorParameterValueEditorOnly(TEXT("BaseColor"), FLinearColor(R, G, B, A));
+		if (HasTransparency)
+		{
+			MaterialInstance->SetScalarParameterValueEditorOnly(TEXT("Opacity"), A);
+		}
+
+		if (!FPaths::FileExists(PackageFileName) && bSaveMaterials)
+		{
+			MaterialPackage->FullyLoad();
+			MaterialInstance->Rename(*MaterialName, MaterialPackage);
+			MaterialInstance->SetFlags(RF_Public | RF_Standalone);
+			MaterialPackage->MarkPackageDirty();
+			FAssetRegistryModule::AssetCreated(MaterialInstance);
+			FSavePackageArgs SaveArgs;
+			SaveArgs.SaveFlags = RF_Public | RF_Standalone;
+			PackagesToSave.Add(MaterialPackage);
+			UPackage::SavePackage(MaterialPackage, MaterialInstance, *PackageFileName, SaveArgs);
+		}
+
+		MaterialsCache.Add(SamplePath, MaterialInstance);
+	}
+
+	return CreatedMesh->AddMaterial(MaterialInstance);
+#else
 	UMaterialInstanceDynamic* DynamicMaterial = UMaterialInstanceDynamic::Create(Material, CreatedMesh);
 	if (!DynamicMaterial)
 	{
@@ -1549,6 +1603,8 @@ FName UFragmentsImporter::AddMaterialToMesh(UStaticMesh*& CreatedMesh, const Mat
 
 	// Add Material
 	return CreatedMesh->AddMaterial(DynamicMaterial);
+#endif
+
 }
 
 void UFragmentsImporter::AddMaterialToDynamicMesh(UDynamicMeshComponent* InDynComp, const Material* RefMaterial, UFragmentModelWrapper* InWrapperRef, int32 InMaterialIndex)
@@ -1756,12 +1812,12 @@ bool UFragmentsImporter::TriangulatePolygonWithHoles(const TArray<FVector>& Poin
 	return true;
 }
 
-void UFragmentsImporter::BuildFullCircleExtrusion(UStaticMeshDescription& StaticMeshDescription, const CircleExtrusion* CircleExtrusion, const Material* RefMaterial, UStaticMesh* StaticMesh)
+void UFragmentsImporter::BuildFullCircleExtrusion(UStaticMeshDescription& StaticMeshDescription, const CircleExtrusion* CircleExtrusion, const Material* RefMaterial, UStaticMesh* StaticMesh, const FString& InModelGuid)
 {
 	FStaticMeshAttributes Attributes(StaticMeshDescription.GetMeshDescription());
 	Attributes.Register();
 
-	FName MaterialSlotName = AddMaterialToMesh(StaticMesh, RefMaterial);
+	FName MaterialSlotName = AddMaterialToMesh(StaticMesh, RefMaterial, InModelGuid);
 	const FPolygonGroupID PolygonGroupId = StaticMeshDescription.CreatePolygonGroup();
 	StaticMeshDescription.SetPolygonGroupMaterialSlotName(PolygonGroupId, MaterialSlotName);
 
