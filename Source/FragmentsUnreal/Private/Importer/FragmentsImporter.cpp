@@ -152,8 +152,40 @@ TArray<FItemAttribute> UFragmentsImporter::GetItemPropertySets(AFragment* InFrag
 
 	TSet<int32> Visited;
 	CollectPropertiesRecursive(InModel, InFragment->GetLocalId(), Visited, CollectedAttributes);
+	return UFragmentsUtils::ParsePropertySets(CollectedAttributes);
+	//return CollectedAttributes;
+}
 
-	return CollectedAttributes;
+TArray<FItemAttribute> UFragmentsImporter::GetItemPropertySets(FFragmentItem* InFragment)
+{
+	TArray<FItemAttribute> CollectedAttributes;
+	if (InFragment->ModelGuid.IsEmpty()) return CollectedAttributes;
+	if (!FragmentModels.Contains(InFragment->ModelGuid)) return CollectedAttributes;
+
+	UFragmentModelWrapper* Wrapper = *FragmentModels.Find(InFragment->ModelGuid);
+	const Model* InModel = Wrapper->GetParsedModel();
+	if (!InModel) return CollectedAttributes;
+
+	TSet<int32> Visited;
+	CollectPropertiesRecursive(InModel, InFragment->LocalId, Visited, CollectedAttributes);
+	return UFragmentsUtils::ParsePropertySets(CollectedAttributes);
+	//return CollectedAttributes;
+}
+
+TArray<FItemAttribute> UFragmentsImporter::GetItemPropertySets(int32 LocalId, const FString& InModelGuid)
+{
+	TArray<FItemAttribute> CollectedAttributes;
+	if (InModelGuid.IsEmpty()) return CollectedAttributes;
+	if (!FragmentModels.Contains(InModelGuid)) return CollectedAttributes;
+
+	UFragmentModelWrapper* Wrapper = *FragmentModels.Find(InModelGuid);
+	const Model* InModel = Wrapper->GetParsedModel();
+	if (!InModel) return CollectedAttributes;
+
+	TSet<int32> Visited;
+	CollectPropertiesRecursive(InModel, LocalId, Visited, CollectedAttributes);
+	return UFragmentsUtils::ParsePropertySets(CollectedAttributes);
+	//return CollectedAttributes;
 }
 
 

@@ -27,9 +27,14 @@ public:
 
 	FString Process(AActor* OwnerA, const FString& FragPath, TArray<AFragment*>& OutFragments, bool bSaveMeshes = true, bool bUseDynamicMesh = false);
 	void SetOwnerRef(AActor* NewOwnerRef) { OwnerRef = NewOwnerRef; }
+	
+	[[deprecated("Use as parameter FFragmentItem instead.")]]
 	void GetItemData(AFragment*& InFragment);
 	void GetItemData(FFragmentItem* InFragmentItem);
+	
 	TArray<FItemAttribute> GetItemPropertySets(AFragment* InFragment);
+	TArray<FItemAttribute> GetItemPropertySets(FFragmentItem* InFragment);
+	TArray<FItemAttribute> GetItemPropertySets(int32 LocalId, const FString& InModelGuid);
 	AFragment* GetItemByLocalId(int32 LocalId, const FString& ModelGuid);
 	FFragmentItem* GetFragmentItemByLocalId(int32 LocalId, const FString& InModelGuid);
 	FString LoadFragment(const FString& FragPath);
