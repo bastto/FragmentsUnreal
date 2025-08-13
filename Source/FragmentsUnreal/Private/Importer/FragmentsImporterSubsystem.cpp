@@ -79,6 +79,12 @@ void UFragmentsImporterSubsystem::GetItemData(FFragmentItem* InFragmentItem)
     Importer->GetItemData(InFragmentItem);
 }
 
+TArray<FItemAttribute> UFragmentsImporterSubsystem::GetItemPropertySets(int32 LocalId, const FString& InModelGuid)
+{
+    check(Importer);
+    return Importer->GetItemPropertySets(LocalId, InModelGuid);
+}
+
 AFragment* UFragmentsImporterSubsystem::GetModelFragment(const FString& InModelGuid)
 {
     check(Importer);

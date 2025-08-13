@@ -119,7 +119,7 @@ TArray<FItemAttribute> UFragmentsUtils::ParseItemAttribute(const Attribute* Attr
 		FString Value = Tokens[1].TrimStartAndEnd().Replace(TEXT("\""), TEXT(""));
 		int64 TypeHash = FCString::Atoi(*Tokens[2].TrimStartAndEnd());
 
-		Parsed.Add(FItemAttribute(Key, Value, TypeHash));
+		Parsed.Add(FItemAttribute(Key, Value,TEXT(""), TypeHash));
 	}
 	return Parsed;
 }
@@ -325,4 +325,44 @@ int32 UFragmentsUtils::GetIndexForLocalId(const Model* InModelRef, int32 LocalId
 		}
 	}
 	return INDEX_NONE;
+}
+
+bool UFragmentsUtils::IsValueKey(const FString& Key)
+{
+	return Key.Equals(TEXT("NominalValue"), ESearchCase::IgnoreCase)
+		|| Key.EndsWith(TEXT("Value"));
+}
+
+TArray<FItemAttribute> UFragmentsUtils::ParsePropertySets(const TArray<FItemAttribute>& InAttributes)
+{
+	//TMap<int32, FString> PropertySets;
+	FString CurrentPropertySet;
+	TArray<FItemAttribute> ParsedPropertySets;
+
+	for (int32 i = 0; i < InAttributes.Num(); ++i)
+	{
+		const FItemAttribute& A = InAttributes[i];
+		const FItemAttribute* Next = (i + 1 < InAttributes.Num()) ? &InAttributes[i + 1] : nullptr;
+
+		if (A.Key.Equals(TEXT("Name"), ESearchCase::IgnoreCase) &&
+			Next && Next->Key.Equals(TEXT("Name"), ESearchCase::IgnoreCase))
+		{
+			CurrentPropertySet = A.Value;    
+			continue;                        
+		}
+		if (A.Key.Equals(TEXT("Name"), ESearchCase::IgnoreCase) &&
+			Next && IsValueKey(Next->Key))
+		{
+			FItemAttribute pa;
+			pa.Key = A.Value;
+			pa.Value = Next->Value;
+			pa.PropertySet = CurrentPropertySet;
+
+			ParsedPropertySets.Add(MoveTemp(pa));
+			++i;
+			continue;
+		}
+	}
+
+	return ParsedPropertySets;
 }

@@ -142,11 +142,14 @@ struct FItemAttribute
 	FString Value;
 
 	UPROPERTY(BlueprintReadOnly)
+	FString PropertySet;
+
+	UPROPERTY(BlueprintReadOnly)
 	int64 TypeHash;
 
-	FItemAttribute() : Key(TEXT("")), Value(TEXT("")), TypeHash(0) {}
-	FItemAttribute(const FString& InKey, const FString& InValue, int64 InTypeHash)
-		:Key(InKey), Value(InValue), TypeHash(InTypeHash) {}
+	FItemAttribute() : Key(TEXT("")), Value(TEXT("")), PropertySet(TEXT("")), TypeHash(0) {}
+	FItemAttribute(const FString& InKey, const FString& InValue, const FString& InPropertySet, int64 InTypeHash)
+		:Key(InKey), Value(InValue), PropertySet(InPropertySet), TypeHash(InTypeHash) {}
 };
 
 USTRUCT()
@@ -209,9 +212,10 @@ public:
 	static FVector SafeVector(const FVector& Vec);
 	static FRotator SafeRotator(const FRotator& Rot);
 	static int32 GetIndexForLocalId(const Model* InModelRef, int32 LocalId);
+	static TArray<FItemAttribute> ParsePropertySets(const TArray<FItemAttribute>& InAttributes);
 
 private:
-
+	static bool IsValueKey(const FString& Key);
 	//void MapSpatialStructureRecursive(const SpatialStructure* Node, int32 ParentId, TArray<FSpatialStructure>& OutList);
 
 };
