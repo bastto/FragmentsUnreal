@@ -42,6 +42,9 @@ public:
 	void GetItemData(FFragmentItem* InFragmentItem);
 
 	UFUNCTION(BlueprintCallable)
+	TArray<FItemAttribute> GetItemPropertySets(int32 LocalId, const FString& InModelGuid);
+
+	UFUNCTION(BlueprintCallable)
 	AFragment* GetModelFragment(const FString& InModelGuid);
 
 	UFUNCTION(BlueprintCallable)
