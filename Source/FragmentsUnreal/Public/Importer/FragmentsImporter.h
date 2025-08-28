@@ -8,6 +8,7 @@
 #include "Utils/FragmentsUtils.h"
 #include "Importer/DeferredPackageSaveManager.h"
 #include "UDynamicMesh.h"
+#include "Materials/MaterialInstanceConstant.h"
 
 #include "FragmentsImporter.generated.h"
 
