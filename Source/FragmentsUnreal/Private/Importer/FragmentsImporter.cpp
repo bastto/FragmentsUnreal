@@ -422,7 +422,7 @@ void UFragmentsImporter::ProcessLoadedFragmentItem(int32 InLocalId, const FStrin
 {
 	FFragmentItem* Item = GetFragmentItemByLocalId(InLocalId, InModelGuid);
 
-	if (!InOwnerRef) return;
+	if (!InOwnerRef || !Item) return;
 
 	SetOwnerRef(InOwnerRef);
 
