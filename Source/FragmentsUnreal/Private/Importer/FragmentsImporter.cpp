@@ -962,6 +962,7 @@ UStaticMesh* UFragmentsImporter::CreateStaticMeshFromShell(const Shell* ShellRef
 		SrcModel.BuildSettings.SrcLightmapIndex = 0;
 		SrcModel.BuildSettings.DstLightmapIndex = 1;
 		SrcModel.BuildSettings.MinLightmapResolution = 64;
+		SrcModel.BuildSettings.bComputeWeightedNormals = true;
 	}
 #endif
 
@@ -1145,6 +1146,7 @@ UStaticMesh* UFragmentsImporter::CreateStaticMeshFromCircleExtrusion(const Circl
 		SrcModel.BuildSettings.SrcLightmapIndex = 0;
 		SrcModel.BuildSettings.DstLightmapIndex = 1;
 		SrcModel.BuildSettings.MinLightmapResolution = 64;
+		SrcModel.BuildSettings.bComputeWeightedNormals = true;
 	}
 #endif
 
