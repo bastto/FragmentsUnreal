@@ -25,7 +25,6 @@
 #include "Materials/MaterialInterface.h"
 #include "DynamicMesh/MeshNormals.h"
 #include "Components/DynamicMeshComponent.h"
-#include "Materials/MaterialInstanceConstant.h"
 
 
 
@@ -423,7 +422,7 @@ void UFragmentsImporter::ProcessLoadedFragmentItem(int32 InLocalId, const FStrin
 {
 	FFragmentItem* Item = GetFragmentItemByLocalId(InLocalId, InModelGuid);
 
-	if (!InOwnerRef) return;
+	if (!InOwnerRef || !Item) return;
 
 	SetOwnerRef(InOwnerRef);
 
@@ -848,52 +847,66 @@ AFragment* UFragmentsImporter::SpawnFragmentModel(FFragmentItem InFragmentItem, 
 				{
 					Mesh = MeshCache[SamplePath];
 				}
-				else if (FPaths::FileExists(PackageFileName))
-				{
-					UPackage* ExistingPackage = LoadPackage(nullptr, *PackagePath, LOAD_None);
-					if (ExistingPackage)
-					{
-						Mesh = FindObject<UStaticMesh>(ExistingPackage, *MeshName);
-					}
-				}
 				else
 				{
-					UPackage* MeshPackage = CreatePackage(*PackagePath);
-					if (representation->representation_class() == RepresentationClass::RepresentationClass_SHELL)
-					{
-						const auto* shell = MeshesRef->shells()->Get(representation->id());
-						Mesh = CreateStaticMeshFromShell(shell, material, *MeshName, MeshPackage, FragmentModel->GetModelGuid());
+					Mesh = LoadObject<UStaticMesh>(nullptr, *SamplePath);
 
-					}
-					else if (representation->representation_class() == RepresentationClass_CIRCLE_EXTRUSION)
-					{
-						const auto* circleExtrusion = MeshesRef->circle_extrusions()->Get(representation->id());
-						Mesh = CreateStaticMeshFromCircleExtrusion(circleExtrusion, material, *MeshName, MeshPackage, FragmentModel->GetModelGuid());
-					}
-
-					if (Mesh)
-					{
-						if (!FPaths::FileExists(PackageFileName) && bSaveMeshes)
-						{
 #if WITH_EDITOR
-							MeshPackage->FullyLoad();
+					if (!Mesh)
+					{
+						UPackage* MeshPackage = CreatePackage(*PackagePath);
+						if (representation->representation_class() == RepresentationClass::RepresentationClass_SHELL)
+						{
+							const auto* shell = MeshesRef->shells()->Get(representation->id());
+							Mesh = CreateStaticMeshFromShell(shell, material, *MeshName, MeshPackage, FragmentModel->GetModelGuid());
+
+						}
+						else if (representation->representation_class() == RepresentationClass_CIRCLE_EXTRUSION)
+						{
+							const auto* circleExtrusion = MeshesRef->circle_extrusions()->Get(representation->id());
+							Mesh = CreateStaticMeshFromCircleExtrusion(circleExtrusion, material, *MeshName, MeshPackage, FragmentModel->GetModelGuid());
+						}
+
+						if (Mesh)
+						{
+							if (!FPaths::FileExists(PackageFileName) && bSaveMeshes)
+							{
+								MeshPackage->FullyLoad();
 	
-							Mesh->Rename(*MeshName, MeshPackage);
-							Mesh->SetFlags(RF_Public | RF_Standalone);
-							MeshPackage->MarkPackageDirty();
-							FAssetRegistryModule::AssetCreated(Mesh);
+								Mesh->Rename(*MeshName, MeshPackage);
+								Mesh->SetFlags(RF_Public | RF_Standalone);
+								MeshPackage->MarkPackageDirty();
+								FAssetRegistryModule::AssetCreated(Mesh);
 	
-							FSavePackageArgs SaveArgs;
-							SaveArgs.SaveFlags = RF_Public | RF_Standalone;
+								FSavePackageArgs SaveArgs;
+								SaveArgs.SaveFlags = RF_Public | RF_Standalone;
 	
-							PackagesToSave.Add(MeshPackage);
-#endif
-							UPackage::SavePackage(MeshPackage, Mesh, *PackageFileName, SaveArgs);
+								PackagesToSave.Add(MeshPackage);
+								UPackage::SavePackage(MeshPackage, Mesh, *PackageFileName, SaveArgs);
+							}
 						}
 					}
-
+#else
+					if (!Mesh)
+					{
+						UE_LOG(LogFragments, Error, TEXT("Cooked mesh not found: %s"), *SamplePath);
+						continue;
+					}
+#endif
 					MeshCache.Add(SamplePath, Mesh);
 				}
+				//else if (FPaths::FileExists(PackageFileName))
+				//{
+				//	UPackage* ExistingPackage = LoadPackage(nullptr, *PackagePath, LOAD_None);
+				//	if (ExistingPackage)
+				//	{
+				//		Mesh = FindObject<UStaticMesh>(ExistingPackage, *MeshName);
+				//	}
+				//}
+				//else
+				//{
+
+				//}
 
 				if (Mesh)
 				{
@@ -949,6 +962,7 @@ UStaticMesh* UFragmentsImporter::CreateStaticMeshFromShell(const Shell* ShellRef
 		SrcModel.BuildSettings.SrcLightmapIndex = 0;
 		SrcModel.BuildSettings.DstLightmapIndex = 1;
 		SrcModel.BuildSettings.MinLightmapResolution = 64;
+		SrcModel.BuildSettings.bComputeWeightedNormals = true;
 	}
 #endif
 
@@ -956,6 +970,7 @@ UStaticMesh* UFragmentsImporter::CreateStaticMeshFromShell(const Shell* ShellRef
 	MeshParams.bCommitMeshDescription = true;
 	MeshParams.bMarkPackageDirty = true;
 	MeshParams.bUseHashAsGuid = false;
+
 #if !WITH_EDITOR
 	MeshParams.bFastBuild = true;
 #endif
@@ -1131,6 +1146,7 @@ UStaticMesh* UFragmentsImporter::CreateStaticMeshFromCircleExtrusion(const Circl
 		SrcModel.BuildSettings.SrcLightmapIndex = 0;
 		SrcModel.BuildSettings.DstLightmapIndex = 1;
 		SrcModel.BuildSettings.MinLightmapResolution = 64;
+		SrcModel.BuildSettings.bComputeWeightedNormals = true;
 	}
 #endif
 
