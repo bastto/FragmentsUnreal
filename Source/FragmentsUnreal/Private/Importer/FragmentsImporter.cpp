@@ -796,16 +796,19 @@ AFragment* UFragmentsImporter::SpawnFragmentModel(FFragmentItem InFragmentItem, 
 		{
 			const FFragmentSample& Sample = Samples[i];
 
-			FString MeshName = FString::Printf(TEXT("%d_%d"), FragmentModel->GetLocalId(), i);
+			const Material* material = MeshesRef->materials()->Get(Sample.MaterialIndex);
+			const Representation* representation = MeshesRef->representations()->Get(Sample.RepresentationIndex);
+			const Transform* local_transform = MeshesRef->local_transforms()->Get(Sample.LocalTransformIndex);
+
+			const uint32 repId = representation->id();
+
+			FString MeshName = FString::Printf(TEXT("rep_%u"), repId);
 			FString PackagePath = TEXT("/Game/Buildings") / FragmentModel->GetModelGuid() / MeshName;
 			const FString SamplePath = PackagePath + TEXT(".") + MeshName;
 
 			FString UniquePackageName = FPackageName::ObjectPathToPackageName(PackagePath);
 			FString PackageFileName = FPackageName::LongPackageNameToFilename(UniquePackageName, FPackageName::GetAssetPackageExtension());
 
-			const Material* material = MeshesRef->materials()->Get(Sample.MaterialIndex);
-			const Representation* representation = MeshesRef->representations()->Get(Sample.RepresentationIndex);
-			const Transform* local_transform = MeshesRef->local_transforms()->Get(Sample.LocalTransformIndex);
 
 			FTransform LocalTransform = UFragmentsUtils::MakeTransform(local_transform);
 
@@ -813,19 +816,29 @@ AFragment* UFragmentsImporter::SpawnFragmentModel(FFragmentItem InFragmentItem, 
 			{
 				FDynamicMesh3 DynamicMesh;	
 
-				// Class Shell
-				UPackage* MeshPackage = CreatePackage(*PackagePath);
-				if (representation->representation_class() == RepresentationClass::RepresentationClass_SHELL)
+				if (FDynamicMesh3* FoundDyn = DynamicMeshByRepId.Find(repId))
 				{
-					const auto* shell = MeshesRef->shells()->Get(representation->id());
-					DynamicMesh = CreateDynamicMeshFromShell(shell, material, *MeshName, MeshPackage);
+					DynamicMesh = *FoundDyn;
+				}
+				else
+				{
+					// Class Shell
+					UPackage* MeshPackage = CreatePackage(*PackagePath);
+					if (representation->representation_class() == RepresentationClass::RepresentationClass_SHELL)
+					{
+						const auto* shell = MeshesRef->shells()->Get(representation->id());
+						DynamicMesh = CreateDynamicMeshFromShell(shell, material, *MeshName, MeshPackage);
+						DynamicMeshByRepId.Add(repId, DynamicMesh);
+					}
+					else if (representation->representation_class() == RepresentationClass_CIRCLE_EXTRUSION)
+					{
+						const auto* circleExtrusion = MeshesRef->circle_extrusions()->Get(representation->id());
+						DynamicMesh = CreateDynamicMeshFromCircleExtrusion(circleExtrusion, material, *MeshName, MeshPackage);
+						DynamicMeshByRepId.Add(repId, DynamicMesh);
+					}
 
 				}
-				else if (representation->representation_class() == RepresentationClass_CIRCLE_EXTRUSION)
-				{
-					const auto* circleExtrusion = MeshesRef->circle_extrusions()->Get(representation->id());
-					DynamicMesh = CreateDynamicMeshFromCircleExtrusion(circleExtrusion, material, *MeshName, MeshPackage);
-				}
+
 
 				UDynamicMeshComponent* DynamicMeshComponent = NewObject<UDynamicMeshComponent>(FragmentModel);
 				DynamicMeshComponent->SetMesh(MoveTemp(DynamicMesh));
@@ -895,18 +908,6 @@ AFragment* UFragmentsImporter::SpawnFragmentModel(FFragmentItem InFragmentItem, 
 #endif
 					MeshCache.Add(SamplePath, Mesh);
 				}
-				//else if (FPaths::FileExists(PackageFileName))
-				//{
-				//	UPackage* ExistingPackage = LoadPackage(nullptr, *PackagePath, LOAD_None);
-				//	if (ExistingPackage)
-				//	{
-				//		Mesh = FindObject<UStaticMesh>(ExistingPackage, *MeshName);
-				//	}
-				//}
-				//else
-				//{
-
-				//}
 
 				if (Mesh)
 				{

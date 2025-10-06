@@ -121,6 +121,9 @@ private:
 	UPROPERTY()
 	TMap<FString, UStaticMesh*> MeshCache;
 
+	TMap<uint32, UStaticMesh*>   StaticMeshByRepId;  
+	TMap<uint32, FDynamicMesh3>  DynamicMeshByRepId;
+
 	UPROPERTY()
 	TMap<FString, UMaterialInstanceConstant*> MaterialsCache;
 
