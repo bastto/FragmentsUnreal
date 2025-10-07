@@ -672,17 +672,19 @@ void UFragmentsImporter::SpawnFragmentModel(AFragment* InFragmentModel, AActor* 
 		{
 			const FFragmentSample& Sample = Samples[i];
 
-			//FString PackagePath = FString::Printf(TEXT("/Game/Buildings/%s"), *InFragmentModel->GetModelGuid());
-			FString MeshName = FString::Printf(TEXT("%d_%d"), InFragmentModel->GetLocalId(), i);
-			FString PackagePath = TEXT("/Game/Buildings") / InFragmentModel->GetModelGuid()/ MeshName;
+			const Material* material = MeshesRef->materials()->Get(Sample.MaterialIndex);
+			const Representation* representation = MeshesRef->representations()->Get(Sample.RepresentationIndex);
+			const Transform* local_transform = MeshesRef->local_transforms()->Get(Sample.LocalTransformIndex);
+
+			const uint32 repId = representation->id();
+
+			FString MeshName = FString::Printf(TEXT("rep_%u"), repId);
+			FString PackagePath = TEXT("/Game/Buildings") / InFragmentModel->GetModelGuid() / MeshName;
 			const FString SamplePath = PackagePath + TEXT(".") + MeshName;
 
 			FString UniquePackageName = FPackageName::ObjectPathToPackageName(PackagePath);
 			FString PackageFileName = FPackageName::LongPackageNameToFilename(UniquePackageName, FPackageName::GetAssetPackageExtension());
 
-			const Material* material = MeshesRef->materials()->Get(Sample.MaterialIndex);
-			const Representation* representation = MeshesRef->representations()->Get(Sample.RepresentationIndex);
-			const Transform* local_transform = MeshesRef->local_transforms()->Get(Sample.LocalTransformIndex);
 
 			FTransform LocalTransform = UFragmentsUtils::MakeTransform(local_transform);
 
