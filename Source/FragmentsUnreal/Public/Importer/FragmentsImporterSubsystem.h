@@ -59,6 +59,8 @@ public:
 	UFUNCTION(BlueprintCallable)
 	FTransform GetBaseCoordinates();
 
+    UFUNCTION(BlueprintCallable) void ResetBaseCoordinates();
+
 	FORCEINLINE const TMap<FString, class UFragmentModelWrapper*>& GetFragmentModels() const
 	{
 		return FragmentModels;

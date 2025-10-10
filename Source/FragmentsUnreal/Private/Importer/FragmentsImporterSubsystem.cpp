@@ -97,6 +97,12 @@ FTransform UFragmentsImporterSubsystem::GetBaseCoordinates()
     return Importer->GetBaseCoordinates();
 }
 
+void UFragmentsImporterSubsystem::ResetBaseCoordinates()
+{
+    check(Importer);
+    Importer->ResetBaseCoordinates();
+}
+
 void UFragmentsImporterSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
     Super::Initialize(Collection);

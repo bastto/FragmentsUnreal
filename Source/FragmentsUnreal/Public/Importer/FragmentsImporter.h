@@ -45,6 +45,7 @@ public:
 	void UnloadFragment(const FString& ModelGuid);
 	AFragment* GetModelFragment(const FString& ModelGuid);
 	FTransform GetBaseCoordinates() { return BaseCoordinates; }
+	void ResetBaseCoordinates();
 
 	FORCEINLINE const TMap<FString, class UFragmentModelWrapper*>& GetFragmentModels() const
 	{

@@ -505,6 +505,12 @@ AFragment* UFragmentsImporter::GetModelFragment(const FString& ModelGuid)
 	return nullptr;
 }
 
+void UFragmentsImporter::ResetBaseCoordinates()
+{
+	BaseCoordinates = FTransform::Identity;
+	bBaseCoordinatesInitialized = false;
+}
+
 void UFragmentsImporter::CollectPropertiesRecursive(
 	const Model* InModel,
 	int32 StartLocalId,
